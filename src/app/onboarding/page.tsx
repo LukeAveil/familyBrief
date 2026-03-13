@@ -1,50 +1,61 @@
 
-"use client";
+ "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getAccessToken } from "@/services/authClient";
 
 type Step = "welcome" | "family" | "members" | "email" | "payment";
 
-const MEMBER_COLORS = ["#f59e0b", "#10b981", "#3b82f6", "#ec4899", "#8b5cf6", "#ef4444"];
+const MEMBER_COLORS = [
+  "#f59e0b",
+  "#10b981",
+  "#3b82f6",
+  "#ec4899",
+  "#8b5cf6",
+  "#ef4444",
+];
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("welcome");
   const [familyName, setFamilyName] = useState("");
   const [parentName, setParentName] = useState("");
-  const [members, setMembers] = useState([{ name: "", role: "child", age: "", color: MEMBER_COLORS[0] }]);
+  const [members, setMembers] = useState([
+    { name: "", role: "child", age: "", color: MEMBER_COLORS[0] },
+  ]);
   const [saving, setSaving] = useState(false);
 
   // If the user is already onboarded (profile + members), skip straight to dashboard.
   useEffect(() => {
     async function loadExisting() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const token = await getAccessToken();
+      if (!token) {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("users")
-        .select("name,family_name")
-        .eq("id", user.id)
-        .maybeSingle();
+      // Load profile
+      const profileRes = await fetch("/api/profile", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      if (profile) {
-        setParentName(profile.name ?? "");
-        setFamilyName(profile.family_name ?? "");
+      if (profileRes.ok) {
+        const profile = await profileRes.json();
+        if (profile) {
+          setParentName(profile.name ?? "");
+          setFamilyName(profile.familyName ?? "");
+        }
       }
 
-      const { data: existingMembers } = await supabase
-        .from("family_members")
-        .select("id,name,role,age,color")
-        .eq("user_id", user.id);
+      // Load family members
+      const membersRes = await fetch("/api/family-members", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      if (existingMembers && existingMembers.length > 0) {
-        router.push("/dashboard");
+      if (membersRes.ok) {
+        const existingMembers = await membersRes.json();
+        if (Array.isArray(existingMembers) && existingMembers.length > 0) {
+          router.push("/dashboard");
+        }
       }
     }
 
@@ -64,26 +75,52 @@ export default function OnboardingPage() {
 
   const saveAndContinue = async () => {
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const token = await getAccessToken();
+    if (!token) {
       router.push("/auth/check-email");
       return;
     }
 
-    await supabase.from("users").upsert({
-      id: user.id, email: user.email,
-      name: parentName, family_name: familyName,
+    // Save profile
+    const profileRes = await fetch("/api/profile", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        name: parentName,
+        familyName,
+      }),
     });
 
+    if (!profileRes.ok) {
+      setSaving(false);
+      return;
+    }
+
+    // Save family members via API
     const validMembers = members.filter((m) => m.name.trim());
     if (validMembers.length > 0) {
-      await supabase.from("family_members").insert(
-        validMembers.map((m) => ({
-          user_id: user.id, name: m.name,
-          role: m.role, age: m.age ? parseInt(m.age) : null, color: m.color,
-        }))
+      await Promise.all(
+        validMembers.map((m) =>
+          fetch("/api/family-members", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              name: m.name,
+              role: m.role,
+              age: m.age ? parseInt(m.age) : undefined,
+              color: m.color,
+            }),
+          })
+        )
       );
     }
+
     setSaving(false);
     setStep("email");
   };
