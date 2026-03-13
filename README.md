@@ -102,13 +102,18 @@ Deploy to Vercel. Set up a cron job (Vercel Cron or GitHub Actions) to call `/ap
 
 ## Tech Debt & Clean‑up Checklist
 
-- [ ] Extract remaining Supabase calls from client components/hooks into services + API routes
+- [x] Extract remaining Supabase calls from client components/hooks into services + API routes
 - [ ] Consolidate auth flows (`/auth`, `/auth/check-email`, onboarding) and document the happy path
 - [ ] Add error boundary / empty state components for dashboard and family screens
 - [ ] Improve domain types (`src/domain/*`) with richer value objects and invariants
-- [ ] Add unit tests for services (`eventService`, `familyService`, `briefingService`)
+- [x] Set up Jest + React Testing Library and get a green test suite
+- [x] Add unit tests for core services (`eventService`, `familyService`)
+- [ ] Add unit tests for remaining services (`briefingService`, `userService`)
+- [ ] Add component tests for key calendar UI (`CalendarGrid`, `EventSidebar`, `AddEventModal`)
 - [ ] Add E2E test for signup → onboarding → first event flow
 - [ ] Improve accessibility (focus states, ARIA roles, keyboard navigation across calendar)
+- [ ] Add CI (GitHub Actions) to run tests and lint on every push/PR
+- [ ] Track and enforce minimum test coverage thresholds over time
 
 ## Product Roadmap (High Level)
 
