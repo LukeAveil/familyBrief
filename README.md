@@ -65,3 +65,31 @@ npm run dev
 
 ## Deployment
 Deploy to Vercel. Set up a cron job (Vercel Cron or GitHub Actions) to call `/api/weekly-briefing` every Sunday at 7am.
+
+## Tech Debt & Clean‑up Checklist
+
+- [ ] Extract remaining Supabase calls from client components/hooks into services + API routes
+- [ ] Consolidate auth flows (`/auth`, `/auth/check-email`, onboarding) and document the happy path
+- [ ] Add error boundary / empty state components for dashboard and family screens
+- [ ] Improve domain types (`src/domain/*`) with richer value objects and invariants
+- [ ] Add unit tests for services (`eventService`, `familyService`, `briefingService`)
+- [ ] Add E2E test for signup → onboarding → first event flow
+- [ ] Improve accessibility (focus states, ARIA roles, keyboard navigation across calendar)
+
+## Product Roadmap (High Level)
+
+### v0.1 – Private Alpha
+- [x] Basic family calendar with manual event entry
+- [x] Email parsing into events for a single family
+- [x] Weekly briefing email per family
+- [ ] Simple settings page (manage subscription, email preferences)
+
+### v0.2 – Multi‑family polish
+- [ ] Shared calendar view across multiple guardians
+- [ ] Per‑child preferences (who gets which briefings / notifications)
+- [ ] Better mobile layout for week strip and sidebar
+
+### v0.3 – Insights & automation
+- [ ] “Clash detection” for overlapping events across family members
+- [ ] Smart reminders (travel time, packing lists) based on event type
+- [ ] Briefing history view inside the app with search/filter
