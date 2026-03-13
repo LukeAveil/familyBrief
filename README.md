@@ -2,42 +2,76 @@
 
 > Your family's AI chief of staff
 
-## What it does
-- Parses forwarded school/activity emails into calendar events using Claude AI
-- Displays a clean family calendar with colour-coded members
-- Sends a personalised weekly briefing every Sunday morning
+## Why this project exists
 
-## Tech Stack
-- **Frontend**: Next.js 14 + Tailwind CSS
-- **Database**: Supabase (auth + postgres)
-- **AI**: Claude (Anthropic) — email parsing + briefing generation
-- **Email**: Resend — inbound parsing + outbound delivery
-- **Payments**: Stripe — $5/month subscription
+This project is intentionally both a **real product** and a **sandbox for learning**. My goals are to:
+
+- Explore how far I can get with **pair‑/live‑coding alongside AI**, and how much direction an experienced developer still needs to provide.
+- Try out **modern tooling** (Next.js App Router, TanStack Query, Zustand, Supabase, Stripe, Resend) in a realistic, end‑to‑end app.
+- Experiment with **AI technologies and APIs** (Anthropic / Claude) and see what good patterns for prompts, error‑handling, and observability look like.
+- Learn **how to design and integrate AI features** into a web app in a maintainable, testable way (not just “call the model from a button click”).
+- Solve a **real-world problem** my family (and many others) have: chaotic school/activity communications and calendar overload.
+- Practice thinking like a **product manager**: breaking down the product into increments, roadmapping, and iterating based on feedback.
+- Refine my own **development workflow in the AI era** — what to delegate to AI, what to keep as human judgment, and how to combine both effectively.
+
+## What it does (current & planned)
+- ✅ Displays a clean family calendar with colour-coded members
+- ✅ Lets you add family members and events manually
+- 🔜 Parses forwarded school/activity emails into calendar events using Claude AI
+- 🔜 Sends a personalised weekly briefing every Sunday morning
+
+## Tech Stack & Architecture
+
+- **Framework**: Next.js 14 (App Router) for routing, API routes, and server/client components.
+- **UI / State**:
+  - React 18 function components.
+  - **TanStack Query** for server state (events, family members) + caching and refetching.
+  - **Zustand** for lightweight client/UI state (e.g. selected date on the dashboard).
+- **Backend & Data**:
+  - **Supabase** (Postgres + Auth) as the primary data store.
+  - `supabaseAdmin` (service role) used only on the server in API routes and services.
+- **Domain & Services**:
+  - Domain types in `src/types` and `src/domain` model users, family members, events, and briefings.
+  - Application services in `src/services` encapsulate business logic (`eventService`, `familyService`, `briefingService`).
+- **AI & Email**:
+  - **Claude (Anthropic)** for email parsing and weekly briefing generation.
+  - **Resend** for outbound briefing email delivery.
+- **Billing**:
+  - **Stripe** for subscription billing (planned $5/month offering).
 
 ## Project Structure
 ```
 src/
 ├── app/
 │   ├── api/
-│   │   ├── parse-email/     # Inbound email webhook → Claude parsing
-│   │   ├── weekly-briefing/ # Cron job → generate + send Sunday briefings
-│   │   ├── events/          # CRUD for calendar events
-│   │   └── auth/            # Supabase auth handlers
-│   ├── dashboard/           # Main calendar view
+│   │   ├── auth/
+│   │   │   └── logout/      # POST /api/auth/logout – server-side sign‑out
+│   │   ├── events/          # /api/events – CRUD for calendar events via eventService
+│   │   ├── family-members/  # /api/family-members – read/create family members via familyService
+│   │   ├── parse-email/     # Inbound email webhook → Claude parsing → events
+│   │   └── weekly-briefing/ # Cron job → generate + send Sunday briefings
+│   ├── dashboard/           # Main calendar view (uses TanStack Query + Zustand)
+│   ├── family/              # Family members management screen
 │   ├── onboarding/          # Family setup flow
-│   └── auth/                # Login / signup pages
+│   └── auth/                # Login / signup + email confirmation screens
 ├── components/
-│   ├── ui/                  # Buttons, inputs, modals
-│   ├── calendar/            # Calendar grid + event cards
-│   ├── briefing/            # Briefing preview component
-│   └── layout/              # Nav, sidebar, shell
+│   ├── calendar/            # Calendar grid, week strip, event sidebar, add-event modal
+│   └── layout/              # Dashboard layout (sidebar, shell)
 ├── lib/
-│   ├── anthropic.ts         # AI prompts (email parsing, briefing gen)
-│   ├── supabase.ts          # DB client
+│   ├── anthropic.ts         # Anthropic client + email/briefing prompt helpers
+│   ├── supabase.ts          # Browser Supabase client (auth/session)
+│   ├── supabaseAdmin.ts     # Service‑role Supabase client (server‑only)
 │   ├── stripe.ts            # Payment helpers
 │   └── email.ts             # Resend helpers
-├── hooks/                   # useEvents, useFamilyMembers, etc.
-└── types/                   # Shared TypeScript types
+├── domain/                  # Domain-level wrappers for core models (events, family members)
+├── services/
+│   ├── authClient.ts        # Client-side helpers (get access token, logout)
+│   ├── eventService.ts      # Event fetch/create/delete using supabaseAdmin
+│   ├── familyService.ts     # Family member fetch/create using supabaseAdmin
+│   └── briefingService.ts   # Weekly briefing generation + email sending orchestration
+├── hooks/                   # useEvents, useFamilyMembers – TanStack Query feature hooks
+├── stores/                  # Zustand stores (e.g. UI store for selected date)
+└── types/                   # Shared TypeScript types (domain-oriented shapes)
 ```
 
 ## Setup
@@ -80,8 +114,8 @@ Deploy to Vercel. Set up a cron job (Vercel Cron or GitHub Actions) to call `/ap
 
 ### v0.1 – Private Alpha
 - [x] Basic family calendar with manual event entry
-- [x] Email parsing into events for a single family
-- [x] Weekly briefing email per family
+- [ ] Email parsing into events for a single family
+- [ ] Weekly briefing email per family
 - [ ] Simple settings page (manage subscription, email preferences)
 
 ### v0.2 – Multi‑family polish
