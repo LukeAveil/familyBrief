@@ -30,6 +30,7 @@ export default function OnboardingPage() {
     async function loadExisting() {
       const token = await getAccessToken();
       if (!token) {
+        router.push("/auth");
         return;
       }
 
@@ -77,7 +78,8 @@ export default function OnboardingPage() {
     setSaving(true);
     const token = await getAccessToken();
     if (!token) {
-      router.push("/auth/check-email");
+      setSaving(false);
+      router.push("/auth");
       return;
     }
 

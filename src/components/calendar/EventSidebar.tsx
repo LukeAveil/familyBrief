@@ -18,28 +18,28 @@ export default function EventSidebar({ date, events, members, onDelete, onAdd }:
   const dateLabel = date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 
   return (
-    <aside className="event-sidebar">
+    <aside className="event-sidebar" aria-label={`Events for ${dateLabel}`}>
       <div className="sidebar-date">
-        <span className="sidebar-date-label">{dateLabel}</span>
-        <button className="sidebar-add-btn" onClick={onAdd}>+</button>
+        <span className="sidebar-date-label" id="sidebar-date-label">{dateLabel}</span>
+        <button type="button" className="sidebar-add-btn" onClick={onAdd} aria-label="Add event">+</button>
       </div>
 
       {events.length === 0 ? (
         <div className="no-events">
-          <span className="no-events-icon">◎</span>
+          <span className="no-events-icon" aria-hidden>◎</span>
           <p>Nothing scheduled</p>
-          <button className="add-first-btn" onClick={onAdd}>Add an event</button>
+          <button type="button" className="add-first-btn" onClick={onAdd}>Add an event</button>
         </div>
       ) : (
-        <ul className="event-list">
+        <ul className="event-list" role="list">
           {events.map((event) => {
             const member = members.find((m) => m.id === event.familyMemberId);
             return (
               <li key={event.id} className="event-card" style={{ borderLeftColor: member?.color || "#f59e0b" }}>
                 <div className="event-card-top">
-                  <span className="event-cat-icon">{CATEGORY_ICONS[event.category] || "📌"}</span>
+                  <span className="event-cat-icon" aria-hidden>{CATEGORY_ICONS[event.category] || "📌"}</span>
                   <span className="event-title">{event.title}</span>
-                  <button className="event-delete" onClick={() => onDelete(event.id)} title="Delete">×</button>
+                  <button type="button" className="event-delete" onClick={() => onDelete(event.id)} title="Delete" aria-label={`Delete ${event.title}`}>×</button>
                 </div>
                 <div className="event-meta">
                   {event.time && <span className="event-time">⏰ {event.time}</span>}

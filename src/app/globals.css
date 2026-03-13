@@ -22,6 +22,16 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--ink); }
 
+/* Focus visible for keyboard navigation (accessibility) */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
 /* App Shell */
 .app-shell { display: flex; min-height: 100vh; }
 .sidebar {
@@ -161,6 +171,28 @@ body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(
   transition: all 0.12s;
 }
 .add-first-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+/* Error boundary & empty / error states */
+.error-boundary-fallback {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 280px; padding: 40px; text-align: center;
+}
+.error-boundary-content { max-width: 360px; }
+.error-boundary-icon { font-size: 40px; display: block; margin-bottom: 12px; }
+.error-boundary-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+.error-boundary-message { font-size: 14px; color: var(--ink-soft); margin-bottom: 16px; }
+.empty-state { text-align: center; padding: 40px 24px; color: var(--ink-soft); }
+.empty-state-icon { font-size: 32px; display: block; margin-bottom: 8px; }
+.empty-state-title { font-size: 16px; font-weight: 500; color: var(--ink); margin-bottom: 8px; }
+.empty-state-description { font-size: 14px; margin-bottom: 16px; }
+.empty-state-action { margin-top: 12px; }
+.error-message {
+  text-align: center; padding: 32px 24px; color: var(--ink-soft);
+  background: rgba(239,68,68,0.06); border-radius: var(--radius); border: 1px solid rgba(239,68,68,0.2);
+}
+.error-message-icon { font-size: 28px; display: block; margin-bottom: 8px; }
+.error-message-text { font-size: 14px; margin-bottom: 12px; }
+
 .event-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .event-card {
   border-left: 3px solid var(--amber); border-radius: 0 8px 8px 0;

@@ -8,6 +8,9 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import WeekStrip from "@/components/calendar/WeekStrip";
 import { useUiStore } from "@/stores/uiStore";
 import { useState } from "react";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import ErrorMessage from "@/components/ErrorMessage";
+import EmptyState from "@/components/EmptyState";
 
 export default function DashboardPage() {
   const today = new Date();
@@ -30,7 +33,7 @@ export default function DashboardPage() {
     .toISOString()
     .split("T")[0];
 
-  const { events, loading, unauthorized, addEvent, deleteEvent } =
+  const { events, loading, error, refetch, unauthorized, addEvent, deleteEvent } =
     useEvents(monthStart, monthEnd);
   const { members } = useFamilyMembers();
 
@@ -38,11 +41,25 @@ export default function DashboardPage() {
     return (
       <DashboardLayout>
         <div className="dashboard-shell">
-          <div className="no-events">
-            <p>
-              You’re not signed in. Go to <a href="/auth">/auth</a> to log in.
-            </p>
-          </div>
+          <EmptyState
+            icon="🔐"
+            title="Not signed in"
+            description="Go to the sign-in page to access your family calendar."
+            action={<a href="/auth" className="btn-save">Sign in</a>}
+          />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="dashboard-shell">
+          <ErrorMessage
+            message={error.message || "Failed to load events. Please try again."}
+            onRetry={() => refetch()}
+          />
         </div>
       </DashboardLayout>
     );
@@ -51,9 +68,10 @@ export default function DashboardPage() {
   const selectedDateEvents = events.filter((e) => e.date === selectedDate);
 
   return (
-    <DashboardLayout>
-      <div className="dashboard-shell">
-        <header className="dash-header">
+    <ErrorBoundary>
+      <DashboardLayout>
+        <div className="dashboard-shell">
+          <header className="dash-header">
           <div className="dash-title">
             <span className="dash-greeting">Good morning,</span>
             <h1 className="dash-name">The Family Brief</h1>
@@ -98,7 +116,8 @@ export default function DashboardPage() {
             onClose={() => setShowAddEvent(false)}
           />
         )}
-      </div>
-    </DashboardLayout>
+        </div>
+      </DashboardLayout>
+    </ErrorBoundary>
   );
 }

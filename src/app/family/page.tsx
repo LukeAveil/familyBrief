@@ -2,9 +2,12 @@
 import { FormEvent, useState } from "react";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import ErrorMessage from "@/components/ErrorMessage";
+import EmptyState from "@/components/EmptyState";
 
 export default function FamilyStandalonePage() {
-  const { members, loading, error, addMember, adding } = useFamilyMembers();
+  const { members, loading, error, refetch, addMember, adding } = useFamilyMembers();
   const [name, setName] = useState("");
   const [role, setRole] = useState<"parent" | "child">("child");
   const [age, setAge] = useState<string>("");
@@ -27,33 +30,32 @@ export default function FamilyStandalonePage() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="dashboard-shell">
-        <header className="dash-header">
-          <div className="dash-title">
-            <span className="dash-greeting">Family</span>
-            <h1 className="dash-name">Your Family Members</h1>
-          </div>
-        </header>
+    <ErrorBoundary>
+      <DashboardLayout>
+        <div className="dashboard-shell">
+          <header className="dash-header">
+            <div className="dash-title">
+              <span className="dash-greeting">Family</span>
+              <h1 className="dash-name">Your Family Members</h1>
+            </div>
+          </header>
 
-        <div className="dash-body">
-          <div className="calendar-grid-wrap" style={{ maxWidth: 600 }}>
-            {loading ? (
-              <p className="dash-greeting">Loading family members...</p>
-            ) : error ? (
-              <p className="dash-greeting">
-                Could not load family members. Please try again.
-              </p>
-            ) : members.length === 0 ? (
-              <div className="no-events">
-                <span className="no-events-icon">◎</span>
-                <p>No family members yet.</p>
-                <p className="dash-greeting">
-                  Add your family members so events can be colour-coded for
-                  everyone.
-                </p>
-              </div>
-            ) : (
+          <div className="dash-body">
+            <div className="calendar-grid-wrap" style={{ maxWidth: 600 }}>
+              {loading ? (
+                <p className="dash-greeting">Loading family members...</p>
+              ) : error ? (
+                <ErrorMessage
+                  message={error.message || "Could not load family members. Please try again."}
+                  onRetry={() => refetch()}
+                />
+              ) : members.length === 0 ? (
+                <EmptyState
+                  icon="◎"
+                  title="No family members yet"
+                  description="Add your family members so events can be colour-coded for everyone."
+                />
+              ) : (
               <ul className="event-list">
                 {members.map((m) => (
                   <li
@@ -75,10 +77,10 @@ export default function FamilyStandalonePage() {
                   </li>
                 ))}
               </ul>
-            )}
-          </div>
+              )}
+            </div>
 
-          <div className="event-sidebar">
+            <div className="event-sidebar">
             <h2 className="sidebar-date-label">Add a family member</h2>
             <p className="dash-greeting" style={{ marginBottom: 16 }}>
               Keep your calendar and Sunday briefings aligned with everyone in
@@ -135,10 +137,11 @@ export default function FamilyStandalonePage() {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
-      </div>
-    </DashboardLayout>
+      </DashboardLayout>
+    </ErrorBoundary>
   );
 }
 

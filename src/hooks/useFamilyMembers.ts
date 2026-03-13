@@ -55,6 +55,7 @@ export function useFamilyMembers() {
     data,
     isLoading,
     error,
+    refetch,
   } = useQuery<FamilyMember[], Error>({
     queryKey: ["familyMembers"],
     queryFn: fetchFamilyMembers,
@@ -71,6 +72,7 @@ export function useFamilyMembers() {
     members: data ?? [],
     loading: isLoading,
     error,
+    refetch,
     addMember: addMemberMutation.mutateAsync,
     adding: addMemberMutation.isPending,
   };

@@ -97,23 +97,42 @@ cp .env.example .env.local
 npm run dev
 ```
 
+## E2E tests (Playwright)
+Run `npm run test:e2e` (requires the dev server or will start it automatically when not in CI). The spec covers auth and check-email pages, and an optional **signed-in flow** (login → dashboard → add event) when `E2E_LOGIN_EMAIL` and `E2E_LOGIN_PASSWORD` are set.
+
 ## Deployment
 Deploy to Vercel. Set up a cron job (Vercel Cron or GitHub Actions) to call `/api/weekly-briefing` every Sunday at 7am.
 
 ## Tech Debt & Clean‑up Checklist
 
 - [x] Extract remaining Supabase calls from client components/hooks into services + API routes
-- [ ] Consolidate auth flows (`/auth`, `/auth/check-email`, onboarding) and document the happy path
-- [ ] Add error boundary / empty state components for dashboard and family screens
-- [ ] Improve domain types (`src/domain/*`) with richer value objects and invariants
+- [x] Consolidate auth flows (`/auth`, `/auth/check-email`, onboarding) and document the happy path
+- [x] Add error boundary / empty state components for dashboard and family screens
+- [x] Improve domain types (`src/domain/*`) with richer value objects and invariants
 - [x] Set up Jest + React Testing Library and get a green test suite
 - [x] Add unit tests for core services (`eventService`, `familyService`)
-- [ ] Add unit tests for remaining services (`briefingService`, `userService`)
-- [ ] Add component tests for key calendar UI (`CalendarGrid`, `EventSidebar`, `AddEventModal`)
-- [ ] Add E2E test for signup → onboarding → first event flow
-- [ ] Improve accessibility (focus states, ARIA roles, keyboard navigation across calendar)
+- [x] Add unit tests for remaining services (`briefingService`, `userService`)
+- [x] Add component tests for key calendar UI (`CalendarGrid`, `EventSidebar`, `AddEventModal`)
+- [x] Add E2E test for signup → onboarding → first event flow
+- [x] Improve accessibility (focus states, ARIA roles, keyboard navigation across calendar)
 - [ ] Add CI (GitHub Actions) to run tests and lint on every push/PR
 - [ ] Track and enforce minimum test coverage thresholds over time
+
+## Auth & Onboarding – Happy Path
+
+1. **Signup or login (`/auth`)**
+   - New users land on `/auth` in **signup** mode, enter email + password, and submit.
+   - Existing users switch to **login** mode on the same screen, enter credentials, and submit.
+2. **Email confirmation (`/auth/check-email`)**
+   - On successful signup, the app redirects to `/auth/check-email?email=<user email>` and Supabase sends a confirmation email.
+   - The user opens the email, clicks the confirmation link, then returns to `/auth` and signs in with the same credentials.
+3. **Onboarding (`/onboarding`)**
+   - On successful login, the app redirects to `/onboarding` for family setup.
+   - `/onboarding` requires an active Supabase session; unauthenticated visitors are redirected back to `/auth`.
+   - The user adds their own name + family name, then adds one or more family members and saves.
+4. **Forwarding + trial**
+   - After saving profile + members, onboarding walks through email forwarding and then offers to start the Stripe trial.
+   - From here the user can either **start the free trial** or **skip** straight to the dashboard (`/dashboard`).
 
 ## Product Roadmap (High Level)
 

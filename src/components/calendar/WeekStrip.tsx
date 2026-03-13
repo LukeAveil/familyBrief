@@ -19,23 +19,31 @@ export default function WeekStrip({ selectedDate, onSelectDate, events }: Props)
   const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   return (
-    <div className="week-strip">
+    <div
+      className="week-strip"
+      role="group"
+      aria-label="Week navigation"
+    >
       {days.map((day, i) => {
         const dateStr = day.toISOString().split("T")[0];
         const isToday = dateStr === today.toISOString().split("T")[0];
         const isSelected = dateStr === selectedDate.toISOString().split("T")[0];
         const dayEvents = events.filter((e) => e.date === dateStr);
+        const dayLabel = `${DAY_LABELS[i]} ${day.getDate()}${isSelected ? ", selected" : ""}${isToday ? ", today" : ""}`;
 
         return (
           <button
             key={i}
+            type="button"
             className={`week-day ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}`}
+            aria-label={dayLabel}
+            aria-pressed={isSelected}
             onClick={() => onSelectDate(day)}
           >
             <span className="wd-label">{DAY_LABELS[i]}</span>
             <span className="wd-num">{day.getDate()}</span>
             {dayEvents.length > 0 && (
-              <span className="wd-dot" style={{ background: dayEvents[0].familyMember?.color || "#f59e0b" }} />
+              <span className="wd-dot" style={{ background: dayEvents[0].familyMember?.color || "#f59e0b" }} aria-hidden />
             )}
           </button>
         );

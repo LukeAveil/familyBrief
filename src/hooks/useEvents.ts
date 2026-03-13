@@ -87,6 +87,7 @@ export function useEvents(start?: string, end?: string) {
     data,
     isLoading,
     error,
+    refetch,
   } = useQuery<Event[], Error>({
     queryKey: ["events", { start, end }],
     queryFn: () => fetchEvents(start, end),
@@ -110,6 +111,7 @@ export function useEvents(start?: string, end?: string) {
     events: data ?? [],
     loading: isLoading,
     error,
+    refetch,
     unauthorized: false,
     addEvent: addEventMutation.mutateAsync,
     deleteEvent: deleteEventMutation.mutateAsync,
