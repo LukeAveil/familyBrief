@@ -63,3 +63,7 @@ export type EventQueryPort = (
   userId: string,
   range: { start: Date; end: Date }
 ) => Promise<Event[]>;
+
+export type UserQueryPort = (
+  userId: string
+) => Promise<{ name: string; familyName: string; email: string } | null>;

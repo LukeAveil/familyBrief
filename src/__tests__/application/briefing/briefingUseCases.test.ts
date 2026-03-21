@@ -7,13 +7,11 @@ import {
 import type {
   BriefingRepository,
   EventQueryPort,
+  UserQueryPort,
   WeeklyBriefingEmailPort,
 } from "@/application/briefing/briefingPorts";
 import { toIsoDateString } from "@/lib/briefing/week";
 
-jest.mock("@/services/userService", () => ({
-  getUserProfile: jest.fn(),
-}));
 jest.mock("@/lib/briefing/week", () => {
   const actual = jest.requireActual<typeof import("@/lib/briefing/week")>(
     "@/lib/briefing/week"
@@ -23,12 +21,6 @@ jest.mock("@/lib/briefing/week", () => {
     getToday: () => actual.parseIsoDate("2026-03-18"),
   };
 });
-
-import { getUserProfile } from "@/services/userService";
-
-const mockGetUserProfile = getUserProfile as jest.MockedFunction<
-  typeof getUserProfile
->;
 
 describe("generateBriefingForUserWeek", () => {
   const repo: BriefingRepository = {
@@ -48,14 +40,14 @@ describe("generateBriefingForUserWeek", () => {
 
   const getEvents: EventQueryPort = jest.fn().mockResolvedValue([]);
 
+  const getUser: UserQueryPort = jest.fn().mockResolvedValue({
+    name: "Pat",
+    familyName: "Rivera",
+    email: "p@x.com",
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetUserProfile.mockResolvedValue({
-      id: "u1",
-      email: "p@x.com",
-      name: "Pat",
-      familyName: "Rivera",
-    });
   });
 
   it("generates, upserts, sends email, and returns emailSent true", async () => {
@@ -65,6 +57,7 @@ describe("generateBriefingForUserWeek", () => {
       repo,
       email,
       getEvents,
+      getUser,
       getFamilyMembers: jest.fn().mockResolvedValue([]),
       generate,
     });
@@ -85,6 +78,7 @@ describe("generateBriefingForUserWeek", () => {
       repo,
       email: emailFail,
       getEvents,
+      getUser,
       getFamilyMembers: jest.fn().mockResolvedValue([]),
       generate: jest.fn().mockResolvedValue("X"),
     });

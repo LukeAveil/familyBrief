@@ -1,7 +1,4 @@
-import {
-  getUserProfile,
-  upsertUserProfileForUser,
-} from "@/services/userService";
+import { supabaseUserRepository } from "@/infrastructure/user/supabaseUserRepository";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 jest.mock("@/lib/supabaseAdmin", () => ({
@@ -12,12 +9,12 @@ jest.mock("@/lib/supabaseAdmin", () => ({
 
 const mockFrom = supabaseAdmin.from as jest.Mock;
 
-describe("userService", () => {
+describe("supabaseUserRepository", () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe("getUserProfile", () => {
+  describe("getById", () => {
     it("maps user row to UserProfile and returns it", async () => {
       const selectMock = jest.fn().mockReturnThis();
       const eqMock = jest.fn().mockReturnThis();
@@ -37,7 +34,7 @@ describe("userService", () => {
         maybeSingle: maybeSingleMock,
       });
 
-      const profile = await getUserProfile("u1");
+      const profile = await supabaseUserRepository.getById("u1");
 
       expect(mockFrom).toHaveBeenCalledWith("users");
       expect(selectMock).toHaveBeenCalledWith("id,email,name,family_name");
@@ -57,7 +54,7 @@ describe("userService", () => {
         maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
       });
 
-      const profile = await getUserProfile("u1");
+      const profile = await supabaseUserRepository.getById("u1");
       expect(profile).toBeNull();
     });
 
@@ -71,11 +68,13 @@ describe("userService", () => {
         }),
       });
 
-      await expect(getUserProfile("u1")).rejects.toThrow("db error");
+      await expect(supabaseUserRepository.getById("u1")).rejects.toThrow(
+        "db error"
+      );
     });
   });
 
-  describe("upsertUserProfileForUser", () => {
+  describe("upsert", () => {
     it("upserts and returns mapped UserProfile", async () => {
       const upsertMock = jest.fn().mockReturnThis();
       const selectMock = jest.fn().mockReturnThis();
@@ -95,7 +94,7 @@ describe("userService", () => {
         single: singleMock,
       });
 
-      const profile = await upsertUserProfileForUser("u1", {
+      const profile = await supabaseUserRepository.upsert("u1", {
         name: "Jane",
         familyName: "The Smiths",
         email: "jane@example.com",
@@ -130,7 +129,7 @@ describe("userService", () => {
       });
 
       await expect(
-        upsertUserProfileForUser("u1", {
+        supabaseUserRepository.upsert("u1", {
           name: "Jane",
           familyName: "The Smiths",
           email: "jane@example.com",

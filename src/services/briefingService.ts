@@ -11,7 +11,7 @@ import {
 import { supabaseBriefingRepository } from "@/infrastructure/briefing/supabaseBriefingRepository";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { runGetEventsForUser } from "@/application/events/eventModule";
-import { getUserProfile } from "@/services/userService";
+import { runGetUserProfile } from "@/application/user/userModule";
 import type { WeeklyBriefing } from "@/types";
 import type { Event } from "@/types";
 
@@ -40,7 +40,7 @@ export async function ensureBriefingForWeek(
   const weekStart = getWeekStart(parseIsoDate(eventDate));
   const weekEnd = getWeekEnd(weekStart);
 
-  const profile = await getUserProfile(userId);
+  const profile = await runGetUserProfile(userId);
   if (!profile) return;
 
   const events = await runGetEventsForUser(userId, {

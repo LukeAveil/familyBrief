@@ -2,6 +2,7 @@ import type {
   BriefingGeneratorPort,
   BriefingRepository,
   EventQueryPort,
+  UserQueryPort,
   WeeklyBriefingEmailPort,
 } from "@/application/briefing/briefingPorts";
 import { generateWeeklyBriefing } from "@/lib/anthropic";
@@ -11,13 +12,13 @@ import {
   getWeekEnd,
   getWeekStart,
 } from "@/lib/briefing/week";
-import { getUserProfile } from "@/services/userService";
 import type { BriefingListItem, Event, FamilyMember } from "@/types";
 
 export type GenerateBriefingDeps = {
   repo: BriefingRepository;
   email: WeeklyBriefingEmailPort;
   getEvents: EventQueryPort;
+  getUser: UserQueryPort;
   getFamilyMembers: (userId: string) => Promise<FamilyMember[]>;
   generate?: BriefingGeneratorPort;
 };
@@ -52,8 +53,8 @@ export async function generateBriefingForUserWeek(
   };
   emailSent: boolean;
 }> {
-  const profile = await getUserProfile(userId);
-  if (!profile) {
+  const user = await deps.getUser(userId);
+  if (!user) {
     throw new Error("User profile not found");
   }
 
@@ -68,8 +69,8 @@ export async function generateBriefingForUserWeek(
 
   const runGenerate = deps.generate ?? defaultGenerate;
   const content = await runGenerate({
-    familyName: profile.familyName,
-    parentName: profile.name,
+    familyName: user.familyName,
+    parentName: user.name,
     events: formatted,
   });
 
@@ -83,9 +84,9 @@ export async function generateBriefingForUserWeek(
 
   const weekOf = formatWeekOfLabel(weekStart);
   const emailResult = await deps.email({
-    toEmail: profile.email,
-    toName: profile.name,
-    familyName: profile.familyName,
+    toEmail: user.email,
+    toName: user.name,
+    familyName: user.familyName,
     briefingContent: content,
     weekOf,
     briefingId: saved.id,

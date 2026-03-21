@@ -8,9 +8,9 @@ import {
   userProfileResponseSchema,
 } from "@/lib/api/schemas";
 import {
-  getUserProfile,
-  upsertUserProfileForUser,
-} from "@/services/userService";
+  runGetUserProfile,
+  runUpsertUserProfile,
+} from "@/application/user/userModule";
 
 async function getAuthedUser(req: NextRequest) {
   const auth = req.headers.get("authorization") || "";
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const profile = await getUserProfile(user.id);
+    const profile = await runGetUserProfile(user.id);
     return jsonResponse(profile, profileGetResponseSchema);
   } catch (error: unknown) {
     const message =
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   const body = parsed.data;
 
   try {
-    const profile = await upsertUserProfileForUser(user.id, {
+    const profile = await runUpsertUserProfile(user.id, {
       name: body.name,
       familyName: body.familyName,
       email: user.email ?? "",
