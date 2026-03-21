@@ -1,7 +1,3 @@
-import { Event } from "@/types";
-
-export type EventDomain = Event;
-
 /** Valid event categories (invariant: category must be one of these) */
 export const EVENT_CATEGORIES = [
   "school",
@@ -12,6 +8,26 @@ export const EVENT_CATEGORIES = [
 ] as const;
 
 export type EventCategory = (typeof EVENT_CATEGORIES)[number];
+
+export interface Event {
+  id: string;
+  userId: string;
+  familyMemberId: string | null;
+  familyMember?: {
+    id: string;
+    name: string;
+    color: string;
+  };
+  title: string;
+  description?: string;
+  date: string; // YYYY-MM-DD
+  time?: string;
+  location?: string;
+  category: EventCategory;
+  source: "manual" | "email" | "image";
+  rawEmailId?: string;
+  createdAt: string; // ISO timestamp
+}
 
 /** YYYY-MM-DD date string; use parseEventDate to validate. */
 export type EventDate = string;
@@ -34,7 +50,9 @@ export function parseEventDate(value: unknown): EventDate {
 }
 
 export function isEventCategory(value: string): value is EventCategory {
-  return EVENT_CATEGORIES.includes(value as EventCategory);
+  return (EVENT_CATEGORIES as readonly EventCategory[]).includes(
+    value as EventCategory
+  );
 }
 
 /**
@@ -70,8 +88,7 @@ export function validateEventInput(input: {
   description?: string;
   familyMemberId: string | null;
 } {
-  const title =
-    typeof input.title === "string" ? input.title.trim() : "";
+  const title = typeof input.title === "string" ? input.title.trim() : "";
   if (!title) {
     throw new Error("Event title is required");
   }
@@ -79,9 +96,16 @@ export function validateEventInput(input: {
     title,
     date: parseEventDate(input.date ?? new Date().toISOString().split("T")[0]),
     category: parseEventCategory(input.category ?? "other"),
-    time: typeof input.time === "string" ? input.time.trim() || undefined : undefined,
-    location: typeof input.location === "string" ? input.location.trim() || undefined : undefined,
-    description: typeof input.description === "string" ? input.description.trim() || undefined : undefined,
+    time:
+      typeof input.time === "string" ? input.time.trim() || undefined : undefined,
+    location:
+      typeof input.location === "string"
+        ? input.location.trim() || undefined
+        : undefined,
+    description:
+      typeof input.description === "string"
+        ? input.description.trim() || undefined
+        : undefined,
     familyMemberId:
       typeof input.familyMemberId === "string" && input.familyMemberId.length > 0
         ? input.familyMemberId

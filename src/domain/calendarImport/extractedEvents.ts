@@ -1,12 +1,4 @@
-import type { Event } from "@/types";
-
-export const EVENT_CATEGORIES = new Set([
-  "school",
-  "activity",
-  "medical",
-  "social",
-  "other",
-]);
+import { isEventCategory, type EventCategory } from "@/domain/event";
 
 export type FamilyMemberPick = { id: string; name: string };
 
@@ -19,7 +11,7 @@ export type CalendarEventInsertRow = {
   date: string;
   time: string | null;
   location: string | null;
-  category: Event["category"];
+  category: EventCategory;
   source: "email" | "image";
   raw_email_id: string | null;
 };
@@ -38,9 +30,9 @@ function normalizeNullableString(value: unknown): string | null {
   return value.trim();
 }
 
-export function normalizeCategory(value: unknown): Event["category"] {
-  if (typeof value === "string" && EVENT_CATEGORIES.has(value)) {
-    return value as Event["category"];
+export function normalizeCategory(value: unknown): EventCategory {
+  if (typeof value === "string" && isEventCategory(value)) {
+    return value;
   }
   return "other";
 }

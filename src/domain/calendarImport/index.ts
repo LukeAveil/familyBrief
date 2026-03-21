@@ -1,5 +1,4 @@
 export {
-  EVENT_CATEGORIES,
   type CalendarEventInsertRow,
   type ExtractedEventImportMeta,
   type FamilyMemberPick,

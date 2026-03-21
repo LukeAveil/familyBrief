@@ -1,15 +1,22 @@
-import { FamilyMember } from "@/types";
+export const FAMILY_MEMBER_ROLES = ["parent", "child"] as const;
 
-export type FamilyMemberDomain = FamilyMember;
+export type FamilyMemberRole = (typeof FAMILY_MEMBER_ROLES)[number];
 
-export type FamilyMemberRole = "parent" | "child";
-
-export const FAMILY_MEMBER_ROLES: FamilyMemberRole[] = ["parent", "child"];
+export interface FamilyMember {
+  id: string;
+  userId: string;
+  name: string;
+  role: FamilyMemberRole;
+  age?: number;
+  color: string;
+}
 
 const HEX_COLOR_REGEX = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
 
 export function isFamilyMemberRole(value: string): value is FamilyMemberRole {
-  return FAMILY_MEMBER_ROLES.includes(value as FamilyMemberRole);
+  return (FAMILY_MEMBER_ROLES as readonly FamilyMemberRole[]).includes(
+    value as FamilyMemberRole
+  );
 }
 
 export function parseFamilyMemberRole(value: unknown): FamilyMemberRole {
