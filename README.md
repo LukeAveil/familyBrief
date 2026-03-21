@@ -33,7 +33,7 @@ This project is intentionally both a **real product** and a **sandbox for learni
 | **Testability** | Business rules live in pure functions and use cases; I/O behind interfaces (“ports”) so tests use fakes/mocks. |
 | **Replaceable infrastructure** | Swap Supabase, Resend, or Anthropic without rewriting orchestration—only adapters change. |
 | **Clear boundaries** | UI and HTTP handlers stay thin; they map DTOs and call application code, not SQL or SDKs directly. |
-| **Honest pragmatism** | Full enterprise DDD everywhere would be heavy for a small app—**briefing** uses stricter layering; older areas still use `src/services/*` as a practical application layer. |
+| **Honest pragmatism** | Full enterprise DDD everywhere would be heavy for a small app—**briefing**, **events**, and **family** share the same ports/use-cases/modules pattern; a few cross-cutting pieces remain under `src/services/*` (e.g. user profile, briefing sync/cron, parse-image orchestration). |
 
 ### Architectural style (clean architecture + DDD + SOLID)
 
@@ -46,29 +46,42 @@ We follow **Clean Architecture** ideas: **dependencies point inward**. Outer lay
 - **S** — Single responsibility: `generateBriefingForUserWeek` orchestrates; `supabaseBriefingRepository` persists; `sendWeeklyBriefingEmail` sends mail.
 - **O** — New channels (e.g. push) can implement the same ports without editing domain parsers.
 - **L** — Repository and email implementations are swappable with test doubles.
-- **I** — Small interfaces (`BriefingRepository`, `WeeklyBriefingEmailPort`, `EventQueryPort`) instead of one giant module.
-- **D** — Use cases depend on ports; routes depend on use cases and a small **composition root** (`briefingModule`).
+- **I** — Small interfaces (`BriefingRepository`, `WeeklyBriefingEmailPort`, `EventQueryPort`, `EventRepository`, `FamilyRepository`) instead of one giant module.
+- **D** — Use cases depend on ports; routes delegate to **composition roots** (`briefingModule`, `eventModule`, `familyModule`) that wire concrete adapters.
 
 ### Layered structure
 
 ```mermaid
 flowchart TB
   subgraph delivery [Delivery layer]
-    Pages[app/dashboard pages]
+    Pages[app/dashboard pages + hooks]
     Routes[app/api routes]
   end
   subgraph application [Application layer]
-    UC[briefingUseCases]
-    Ports[briefingPorts interfaces]
-    Mod[briefingModule composition]
+    subgraph briefing_ctx [briefing]
+      UC[briefingUseCases]
+      Ports[briefingPorts]
+      Mod[briefingModule]
+    end
+    subgraph events_ctx [events]
+      EUC[eventUseCases]
+      EP[eventPorts]
+      EMod[eventModule]
+    end
+    subgraph family_ctx [family]
+      FUC[familyUseCases]
+      FP[familyPorts]
+      FMod[familyModule]
+    end
   end
   subgraph domain [Domain layer]
-    Week[lib/briefing/week.ts moment]
-    Parse[lib/briefing/parseSections.ts]
-    Pick[pickCurrentBriefing.ts]
+    Week[lib/briefing/week …]
+    Parse[lib/briefing/parseSections …]
   end
   subgraph infra [Infrastructure layer]
-    Repo[supabaseBriefingRepository]
+    RepoB[supabaseBriefingRepository]
+    RepoE[supabaseEventRepository]
+    RepoF[supabaseFamilyRepository]
     Email[lib/email.ts Resend]
     Anthropic[lib/anthropic.ts]
   end
@@ -79,27 +92,45 @@ flowchart TB
   end
   Pages --> UC
   Routes --> Mod
+  Routes --> EMod
+  Routes --> FMod
   Mod --> UC
+  EMod --> EUC
+  FMod --> FUC
   UC --> Ports
+  EUC --> EP
+  FUC --> FP
   UC --> Week
   UC --> Parse
-  Repo -.implements.-> Ports
+  RepoB -.implements.-> Ports
+  RepoE -.implements.-> EP
+  RepoF -.implements.-> FP
   Email -.implements.-> Ports
-  UC --> Repo
+  UC --> RepoB
   UC --> Email
-  Repo --> PG
+  EUC --> RepoE
+  FUC --> RepoF
+  RepoB --> PG
+  RepoE --> PG
+  RepoF --> PG
   Email --> R
   UC --> Anthropic
   Anthropic --> A
+  Mod -.->|EventQueryPort| EMod
+  Mod -.->|getFamilyMembers| FMod
 ```
 
 **Domain (`src/lib/briefing/`):** Pure logic—no Supabase, no Resend. Calendar week boundaries and labels use **Moment.js** with **ISO week** semantics; **`Date`** is the in-memory type at boundaries; **`toIsoDateString` / `parseIsoDate`** convert for APIs and SQL. Plain-text briefing sections are parsed once for both **HTML email** and **in-app UI** so formatting never drifts.
 
-**Application (`src/application/briefing/`):** **Ports** (`briefingPorts.ts`) define **BriefingRepository**, **WeeklyBriefingEmailPort**, **EventQueryPort**. **Use cases** (`briefingUseCases.ts`) implement `generateBriefingForUserWeek`, `listBriefingItemsForUser`, `recordBriefingFeedback`. **`briefingModule.ts`** wires concrete adapters for the generate API route.
+**Application — briefing (`src/application/briefing/`):** **Ports** (`briefingPorts.ts`) define **BriefingRepository**, **WeeklyBriefingEmailPort**, **EventQueryPort**. **Use cases** (`briefingUseCases.ts`) implement `generateBriefingForUserWeek`, `listBriefingItemsForUser`, `recordBriefingFeedback`. **`briefingModule.ts`** wires adapters and injects **`runGetEventsForUser`** / **`runGetFamilyMembersForUser`** from the events and family composition roots so the generate flow stays testable.
 
-**Infrastructure:** **`supabaseBriefingRepository`** maps rows ↔ domain types; **`email.ts`** implements the email port with the Resend SDK and shared HTML/text. **Anthropic** is called from use cases via the existing generator; we did not rewrite `generateWeeklyBriefing`—it stays a thin adapter over the SDK.
+**Application — events (`src/application/events/`):** **Ports** (`eventPorts.ts`) define **EventRepository**. **Use cases** (`eventUseCases.ts`) list/create/delete events. **`eventModule.ts`** exposes **`runGetEventsForUser`**, **`runCreateManualEventForUser`**, etc., backed by **`supabaseEventRepository`**.
 
-**Delivery:** API routes (`src/app/api/briefing/*`, `src/app/api/observability/feedback`) validate auth (`Authorization: Bearer` + `getAuthedUserIdFromRequest`), map to JSON, and delegate. Client hooks (`useBriefings`) and pages consume the API.
+**Application — family (`src/application/family/`):** **Ports** (`familyPorts.ts`) define **FamilyRepository**. **Use cases** (`familyUseCases.ts`) list and create members. **`familyModule.ts`** exposes **`runGetFamilyMembersForUser`** and **`runCreateFamilyMemberForUser`**.
+
+**Infrastructure:** **`supabaseBriefingRepository`**, **`supabaseEventRepository`**, and **`supabaseFamilyRepository`** map DB rows ↔ domain types; **`email.ts`** implements the email port with the Resend SDK and shared HTML/text. **Anthropic** is called from use cases via the existing generator; we did not rewrite `generateWeeklyBriefing`—it stays a thin adapter over the SDK.
+
+**Delivery:** API routes validate auth (`Authorization: Bearer` + `getAuthedUserIdFromRequest`), map to JSON, and delegate to the relevant **module** (`briefingModule`, `eventModule`, `familyModule`). Client hooks (`useEvents`, `useFamilyMembers`, `useBriefings`) and pages consume the HTTP APIs.
 
 ### Briefing: end-to-end flow (manual generate)
 
@@ -109,7 +140,10 @@ sequenceDiagram
   participant Page as BriefingsPage
   participant Hook as useBriefings
   participant API as POST /api/briefing/generate
+  participant Mod as briefingModule
   participant UC as generateBriefingForUserWeek
+  participant Fam as familyModule
+  participant Ev as eventModule
   participant Repo as BriefingRepository
   participant AI as generateWeeklyBriefing
   participant Mail as Resend email
@@ -117,15 +151,19 @@ sequenceDiagram
   User->>Page: Generate briefing
   Page->>Hook: generateBriefing()
   Hook->>API: Bearer JWT
-  API->>UC: runGenerateBriefingForUserWeek
-  UC->>UC: profile + family members + week range
-  UC->>Events: getEventsForUser date range
+  API->>Mod: runGenerateBriefingForUserWeek
+  Mod->>UC: deps wired
+  UC->>UC: load profile userService
+  UC->>Fam: runGetFamilyMembersForUser
+  UC->>Ev: runGetEventsForUser week range
+  Ev-->>UC: Event[]
   UC->>AI: familyName parentName events
   AI-->>UC: plain text content
   UC->>Repo: upsert week row
   UC->>Mail: HTML plus text email
   Mail-->>UC: ok or fail
-  UC-->>API: briefing plus emailSent
+  UC-->>Mod: briefing plus emailSent
+  Mod-->>API: JSON
   API-->>Hook: JSON
   Hook->>Hook: invalidate briefings query
   Hook-->>Page: show current briefing
@@ -136,7 +174,7 @@ If email fails, the briefing is still **saved**; the API returns **`emailSent: f
 ### Authentication & data access
 
 - **Browser:** `src/lib/supabase.ts` (anon key) for session and client-side auth.
-- **Server:** `src/lib/supabaseAdmin.ts` (service role) **only** in server code (API routes, services). RLS on `weekly_briefings` allows users to **select** their rows; **inserts/updates** for generation use the service role so the same code paths work for cron and manual triggers without widening RLS for arbitrary client writes.
+- **Server:** `src/lib/supabaseAdmin.ts` (service role) **only** in server code (API routes, infrastructure adapters, and a few server-side services). RLS on `weekly_briefings` allows users to **select** their rows; **inserts/updates** for generation use the service role so the same code paths work for cron and manual triggers without widening RLS for arbitrary client writes.
 
 ### Key technology choices (why)
 
@@ -150,13 +188,13 @@ If email fails, the briefing is still **saved**; the API returns **`emailSent: f
 | **Moment.js** | Explicit calendar-week semantics (`isoWeek`) and stable formatting across environments; briefing code uses **`Date`** in TypeScript and converts at I/O boundaries. |
 | **Resend** | Simple transactional email API; HTML + plain text from one send path. |
 | **Claude (Anthropic)** | Family-facing copy and structured extraction; prompts live in `src/lib/anthropic.ts`. |
-| **Jest + RTL** | Unit tests for domain, use cases, services, and API route handlers; `setupTests` sets env for Supabase client in tests. |
+| **Jest + RTL** | Unit tests for domain, use cases, infrastructure adapters, remaining services, and API route handlers; `setupTests` sets env for Supabase client in tests. |
 
 ### Testing strategy
 
 - **Domain:** `parseBriefingSections`, `getWeekStart` / `getWeekEnd`, `pickCurrentBriefing`.
-- **Application:** `generateBriefingForUserWeek`, `listBriefingItemsForUser`, `recordBriefingFeedback` with mocked ports.
-- **Infrastructure:** `briefingService` cron path with mocked repository and email.
+- **Application:** `generateBriefingForUserWeek`, `listBriefingItemsForUser`, `recordBriefingFeedback` with mocked ports; event/family use cases tested via repository fakes where needed.
+- **Infrastructure:** Supabase adapters (`supabaseBriefingRepository`, `supabaseEventRepository`, `supabaseFamilyRepository`) with mocked `supabaseAdmin`; `briefingService` cron path with mocked repository and email.
 - **HTTP:** Route tests with `@jest-environment node` and mocked auth or use cases.
 - **UI:** Component tests for calendar pieces; briefings page relies on domain + hooks tests for faster feedback.
 
@@ -192,10 +230,16 @@ src/
 │   ├── onboarding/
 │   └── auth/
 ├── application/
-│   └── briefing/               # Ports, use cases, composition (briefingModule)
+│   ├── briefing/               # Ports, use cases, briefingModule
+│   ├── events/                 # eventPorts, eventUseCases, eventModule
+│   └── family/                 # familyPorts, familyUseCases, familyModule
 ├── infrastructure/
-│   └── briefing/
-│       └── supabaseBriefingRepository.ts
+│   ├── briefing/
+│   │   └── supabaseBriefingRepository.ts
+│   ├── events/
+│   │   └── supabaseEventRepository.ts
+│   └── family/
+│       └── supabaseFamilyRepository.ts
 ├── components/
 │   ├── calendar/
 │   └── layout/                   # DashboardLayout (sidebar nav)
@@ -207,7 +251,7 @@ src/
 │   ├── apiAuth.ts
 │   ├── supabase.ts / supabaseAdmin.ts
 │   └── stripe.ts
-├── services/                   # Application services (events, family, user, briefing orchestration)
+├── services/                   # Cross-cutting server orchestration (briefingService, userService, parseImageService, …)
 ├── hooks/                      # useEvents, useFamilyMembers, useBriefings
 ├── stores/
 └── types/
@@ -256,7 +300,7 @@ Deploy to Vercel. Set up a cron job (Vercel Cron or GitHub Actions) to call `/ap
 - [x] Add error boundary / empty state components for dashboard and family screens
 - [x] Improve domain types (`src/domain/*`) with richer value objects and invariants
 - [x] Set up Jest + React Testing Library and get a green test suite
-- [x] Add unit tests for core services (`eventService`, `familyService`)
+- [x] Add unit tests for event/family Supabase adapters (`supabaseEventRepository`, `supabaseFamilyRepository`)
 - [x] Add unit tests for remaining services (`briefingService`, `userService`)
 - [x] Add component tests for key calendar UI (`CalendarGrid`, `EventSidebar`, `AddEventModal`)
 - [x] Add E2E test for signup → onboarding → first event flow
