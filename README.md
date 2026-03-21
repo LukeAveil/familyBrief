@@ -1,6 +1,6 @@
 # FamilyBrief 🗓️
 
-![CI](https://github.com/LukeAveil/familyBrief/actions/workflows/ci.yml/badge.svg)
+[![CI](https://github.com/LukeAveil/familyBrief/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/LukeAveil/familyBrief/actions/workflows/ci.yml)
 
 > Your family's AI chief of staff
 
