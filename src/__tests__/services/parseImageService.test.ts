@@ -1,9 +1,10 @@
 /** @jest-environment node */
-jest.mock("@/lib/supabaseAdmin", () => ({
-  supabaseAdmin: {
-    from: jest.fn(),
-    auth: { getUser: jest.fn() },
-  },
+jest.mock("@/application/family/familyModule", () => ({
+  runGetFamilyMembersForUser: jest.fn(),
+}));
+
+jest.mock("@/application/events/eventModule", () => ({
+  runInsertExtractedEventsForUser: jest.fn(),
 }));
 
 jest.mock("@/lib/anthropic", () => ({
@@ -21,6 +22,8 @@ jest.mock("@/services/briefingService", () => ({
 }));
 
 import { File as NodeBufferFile } from "node:buffer";
+import { runGetFamilyMembersForUser } from "@/application/family/familyModule";
+import { runInsertExtractedEventsForUser } from "@/application/events/eventModule";
 import {
   MAX_PARSE_IMAGE_BYTES,
   buildInsertRowsFromExtracted,
@@ -33,7 +36,6 @@ import {
   resolveMediaTypeForVision,
   validateUploadedFile,
 } from "@/services/parseImageService";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { parseImageOrPdfToEvents } from "@/lib/anthropic";
 import { syncBriefingsForDates } from "@/services/briefingService";
 
@@ -42,7 +44,12 @@ if (typeof globalThis.File === "undefined") {
     NodeBufferFile;
 }
 
-const mockFrom = supabaseAdmin.from as jest.Mock;
+const mockGetFamilyMembers = runGetFamilyMembersForUser as jest.MockedFunction<
+  typeof runGetFamilyMembersForUser
+>;
+const mockInsertExtracted = runInsertExtractedEventsForUser as jest.MockedFunction<
+  typeof runInsertExtractedEventsForUser
+>;
 const mockParseImage = parseImageOrPdfToEvents as jest.MockedFunction<
   typeof parseImageOrPdfToEvents
 >;
@@ -51,6 +58,17 @@ const mockSyncBriefings = syncBriefingsForDates as jest.MockedFunction<
 >;
 
 const imageMeta = { source: "image" as const, raw_email_id: null };
+
+const sampleEvent = {
+  id: "e1",
+  userId: "u1",
+  familyMemberId: null,
+  title: "T",
+  date: "2026-03-15",
+  category: "school" as const,
+  source: "image" as const,
+  createdAt: "2026-03-10T10:00:00.000Z",
+};
 
 describe("parseImageService", () => {
   afterEach(() => {
@@ -210,28 +228,24 @@ describe("parseImageService", () => {
 
   describe("loadFamilyMembers", () => {
     it("returns members on success", async () => {
-      mockFrom.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({
-          data: [{ id: "m1", name: "Alex" }],
-          error: null,
-        }),
-      });
+      mockGetFamilyMembers.mockResolvedValue([
+        {
+          id: "m1",
+          userId: "u1",
+          name: "Alex",
+          role: "child",
+          color: "#f59e0b",
+        },
+      ]);
 
       const r = await loadFamilyMembers("u1");
       expect(r.ok).toBe(true);
       if (r.ok) expect(r.members).toHaveLength(1);
-      expect(mockFrom).toHaveBeenCalledWith("family_members");
+      expect(mockGetFamilyMembers).toHaveBeenCalledWith("u1");
     });
 
-    it("returns failure when Supabase errors", async () => {
-      mockFrom.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({
-          data: null,
-          error: { message: "db down" },
-        }),
-      });
+    it("returns failure when family load throws", async () => {
+      mockGetFamilyMembers.mockRejectedValue(new Error("db down"));
 
       const r = await loadFamilyMembers("u1");
       expect(r.ok).toBe(false);
@@ -241,32 +255,9 @@ describe("parseImageService", () => {
 
   describe("insertCalendarImportEvents", () => {
     it("returns mapped events on success", async () => {
-      mockFrom.mockReturnValue({
-        insert: jest.fn().mockReturnValue({
-          select: jest.fn().mockResolvedValue({
-            data: [
-              {
-                id: "e1",
-                user_id: "u1",
-                family_member_id: null,
-                title: "T",
-                description: null,
-                date: "2026-03-15",
-                time: null,
-                location: null,
-                category: "school",
-                source: "image",
-                raw_email_id: null,
-                created_at: "2026-03-10T10:00:00.000Z",
-                family_members: null,
-              },
-            ],
-            error: null,
-          }),
-        }),
-      });
+      mockInsertExtracted.mockResolvedValue([sampleEvent]);
 
-      const r = await insertCalendarImportEvents([
+      const r = await insertCalendarImportEvents("u1", [
         {
           user_id: "u1",
           family_member_id: null,
@@ -281,6 +272,7 @@ describe("parseImageService", () => {
         },
       ]);
 
+      expect(mockInsertExtracted).toHaveBeenCalledWith("u1", expect.any(Array));
       expect(r.ok).toBe(true);
       if (r.ok) {
         expect(r.events).toHaveLength(1);
@@ -289,17 +281,10 @@ describe("parseImageService", () => {
       }
     });
 
-    it("returns failure when insert fails", async () => {
-      mockFrom.mockReturnValue({
-        insert: jest.fn().mockReturnValue({
-          select: jest.fn().mockResolvedValue({
-            data: null,
-            error: { message: "insert failed" },
-          }),
-        }),
-      });
+    it("returns failure when insert throws", async () => {
+      mockInsertExtracted.mockRejectedValue(new Error("insert failed"));
 
-      const r = await insertCalendarImportEvents([
+      const r = await insertCalendarImportEvents("u1", [
         {
           user_id: "u1",
           family_member_id: null,
@@ -320,45 +305,23 @@ describe("parseImageService", () => {
   });
 
   describe("processParseImageUpload", () => {
-    function mockSupabaseForHappyPath() {
-      mockFrom.mockImplementation((table: string) => {
-        if (table === "family_members") {
-          return {
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockResolvedValue({
-              data: [{ id: "m1", name: "Alex" }],
-              error: null,
-            }),
-          };
-        }
-        if (table === "events") {
-          return {
-            insert: jest.fn().mockReturnValue({
-              select: jest.fn().mockResolvedValue({
-                data: [
-                  {
-                    id: "e1",
-                    user_id: "u1",
-                    family_member_id: null,
-                    title: "Meet",
-                    description: null,
-                    date: "2026-06-01",
-                    time: null,
-                    location: null,
-                    category: "school",
-                    source: "image",
-                    raw_email_id: null,
-                    created_at: "2026-03-10T10:00:00.000Z",
-                    family_members: null,
-                  },
-                ],
-                error: null,
-              }),
-            }),
-          };
-        }
-        return {};
-      });
+    function mockHappyPathModules() {
+      mockGetFamilyMembers.mockResolvedValue([
+        {
+          id: "m1",
+          userId: "u1",
+          name: "Alex",
+          role: "child",
+          color: "#f59e0b",
+        },
+      ]);
+      mockInsertExtracted.mockResolvedValue([
+        {
+          ...sampleEvent,
+          title: "Meet",
+          date: "2026-06-01",
+        },
+      ]);
     }
 
     it("returns 400 when file validation fails", async () => {
@@ -382,13 +345,7 @@ describe("parseImageService", () => {
     });
 
     it("returns 500 when family members cannot be loaded", async () => {
-      mockFrom.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({
-          data: null,
-          error: { message: "err" },
-        }),
-      });
+      mockGetFamilyMembers.mockRejectedValue(new Error("err"));
       const file = new File(["x"], "a.png", { type: "image/png" });
       const r = await processParseImageUpload("u1", file);
       expect(r.ok).toBe(false);
@@ -396,13 +353,7 @@ describe("parseImageService", () => {
     });
 
     it("returns 500 when Claude throws", async () => {
-      mockFrom.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({
-          data: [],
-          error: null,
-        }),
-      });
+      mockGetFamilyMembers.mockResolvedValue([]);
       mockParseImage.mockRejectedValue(new Error("API error"));
       const file = new File(["x"], "a.png", { type: "image/png" });
       const r = await processParseImageUpload("u1", file);
@@ -414,13 +365,7 @@ describe("parseImageService", () => {
     });
 
     it("returns empty success when the model returns no events", async () => {
-      mockFrom.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({
-          data: [],
-          error: null,
-        }),
-      });
+      mockGetFamilyMembers.mockResolvedValue([]);
       mockParseImage.mockResolvedValue([]);
       const file = new File(["x"], "a.png", { type: "image/png" });
       const r = await processParseImageUpload("u1", file);
@@ -428,13 +373,7 @@ describe("parseImageService", () => {
     });
 
     it("returns empty success when extraction yields no valid rows", async () => {
-      mockFrom.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({
-          data: [],
-          error: null,
-        }),
-      });
+      mockGetFamilyMembers.mockResolvedValue([]);
       mockParseImage.mockResolvedValue([{ title: "no date" }]);
       const file = new File(["x"], "a.png", { type: "image/png" });
       const r = await processParseImageUpload("u1", file);
@@ -442,7 +381,7 @@ describe("parseImageService", () => {
     });
 
     it("returns events on full success", async () => {
-      mockSupabaseForHappyPath();
+      mockHappyPathModules();
       mockParseImage.mockResolvedValue([
         {
           title: "Meet",

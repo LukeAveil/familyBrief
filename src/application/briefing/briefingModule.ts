@@ -1,10 +1,17 @@
-import { generateBriefingForUserWeek } from "@/application/briefing/briefingUseCases";
+import {
+  generateBriefingForUserWeek,
+  listBriefingItemsForUser,
+} from "@/application/briefing/briefingUseCases";
 import { runGetFamilyMembersForUser } from "@/application/family/familyModule";
 import { runGetEventsForUser } from "@/application/events/eventModule";
 import { runGetUserProfile } from "@/application/user/userModule";
 import { supabaseBriefingRepository } from "@/infrastructure/briefing/supabaseBriefingRepository";
 import { sendWeeklyBriefingEmail } from "@/lib/email";
 import { toIsoDateString } from "@/lib/briefing/week";
+
+export function runListBriefingItemsForUser(userId: string) {
+  return listBriefingItemsForUser(userId, supabaseBriefingRepository);
+}
 
 export function runGenerateBriefingForUserWeek(userId: string) {
   return generateBriefingForUserWeek(userId, {

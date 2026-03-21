@@ -1,13 +1,15 @@
 import { sendWeeklyBriefingsForActiveUsers } from "@/services/briefingService";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { runGetEventsForUser } from "@/application/events/eventModule";
+import { runGetActiveSubscribedUsers } from "@/application/user/userModule";
 import { generateWeeklyBriefing } from "@/lib/anthropic";
 import { sendWeeklyBriefingEmail } from "@/lib/email";
 import { supabaseBriefingRepository } from "@/infrastructure/briefing/supabaseBriefingRepository";
 
-jest.mock("@/lib/supabaseAdmin", () => ({
-  supabaseAdmin: {
-    from: jest.fn(),
-  },
+jest.mock("@/application/user/userModule", () => ({
+  runGetActiveSubscribedUsers: jest.fn(),
+}));
+jest.mock("@/application/events/eventModule", () => ({
+  runGetEventsForUser: jest.fn(),
 }));
 jest.mock("@/lib/anthropic", () => ({
   generateWeeklyBriefing: jest.fn(),
@@ -21,7 +23,12 @@ jest.mock("@/infrastructure/briefing/supabaseBriefingRepository", () => ({
   },
 }));
 
-const mockFrom = supabaseAdmin.from as jest.Mock;
+const mockActiveUsers = runGetActiveSubscribedUsers as jest.MockedFunction<
+  typeof runGetActiveSubscribedUsers
+>;
+const mockGetEvents = runGetEventsForUser as jest.MockedFunction<
+  typeof runGetEventsForUser
+>;
 const mockGenerateWeeklyBriefing = generateWeeklyBriefing as jest.Mock;
 const mockSendWeeklyBriefingEmail = sendWeeklyBriefingEmail as jest.Mock;
 const mockUpsert = supabaseBriefingRepository.upsertForWeek as jest.Mock;
@@ -36,6 +43,7 @@ describe("briefingService.sendWeeklyBriefingsForActiveUsers", () => {
       content: "Your week ahead...",
       sentAt: new Date("2026-03-17T12:00:00.000Z"),
     });
+    mockGetEvents.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -43,59 +51,40 @@ describe("briefingService.sendWeeklyBriefingsForActiveUsers", () => {
   });
 
   it("returns sent: 0, total: 0 when no active users", async () => {
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "users") {
-        return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockResolvedValue({ data: [], error: null }),
-        };
-      }
-      return {};
-    });
+    mockActiveUsers.mockResolvedValue([]);
 
     const result = await sendWeeklyBriefingsForActiveUsers();
     expect(result).toEqual({ sent: 0, total: 0 });
   });
 
   it("fetches active users, generates briefing, sends email, and upserts record", async () => {
-    const users = [
+    mockActiveUsers.mockResolvedValue([
       {
         id: "u1",
         email: "parent@example.com",
         name: "Jane",
-        family_name: "The Smiths",
+        familyName: "The Smiths",
       },
-    ];
-    const events = [
+    ]);
+    mockGetEvents.mockResolvedValue([
       {
         id: "e1",
+        userId: "u1",
+        familyMemberId: "m1",
+        familyMember: {
+          id: "m1",
+          name: "Alex",
+          color: "#f59e0b",
+        },
         title: "Football",
         date: "2026-03-15",
         time: "17:00",
-        family_members: { name: "Alex" },
-        category: "activity",
         location: "Park",
+        category: "activity",
+        source: "manual",
+        createdAt: "2026-03-10T10:00:00.000Z",
       },
-    ];
-
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "users") {
-        return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockResolvedValue({ data: users, error: null }),
-        };
-      }
-      if (table === "events") {
-        return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockReturnThis(),
-          gte: jest.fn().mockReturnThis(),
-          lte: jest.fn().mockReturnThis(),
-          order: jest.fn().mockResolvedValue({ data: events, error: null }),
-        };
-      }
-      return {};
-    });
+    ]);
 
     const result = await sendWeeklyBriefingsForActiveUsers();
 
@@ -127,30 +116,20 @@ describe("briefingService.sendWeeklyBriefingsForActiveUsers", () => {
   });
 
   it("returns sent count excluding rejected promises", async () => {
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "users") {
-        return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockResolvedValue({
-            data: [
-              { id: "u1", email: "a@x.com", name: "A", family_name: "F" },
-              { id: "u2", email: "b@x.com", name: "B", family_name: "F" },
-            ],
-            error: null,
-          }),
-        };
-      }
-      if (table === "events") {
-        return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockReturnThis(),
-          gte: jest.fn().mockReturnThis(),
-          lte: jest.fn().mockReturnThis(),
-          order: jest.fn().mockResolvedValue({ data: [], error: null }),
-        };
-      }
-      return {};
-    });
+    mockActiveUsers.mockResolvedValue([
+      {
+        id: "u1",
+        email: "a@x.com",
+        name: "A",
+        familyName: "F",
+      },
+      {
+        id: "u2",
+        email: "b@x.com",
+        name: "B",
+        familyName: "F",
+      },
+    ]);
     mockUpsert
       .mockResolvedValueOnce({
         id: "b1",

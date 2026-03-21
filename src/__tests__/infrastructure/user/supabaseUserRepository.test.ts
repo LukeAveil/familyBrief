@@ -137,4 +137,52 @@ describe("supabaseUserRepository", () => {
       ).rejects.toThrow("upsert failed");
     });
   });
+
+  describe("listActiveSubscribed", () => {
+    it("returns mapped profiles for active subscribers", async () => {
+      const selectMock = jest.fn().mockReturnThis();
+      const eqMock = jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: "u1",
+            email: "a@x.com",
+            name: "Ann",
+            family_name: "Fam",
+          },
+        ],
+        error: null,
+      });
+
+      mockFrom.mockReturnValue({
+        select: selectMock,
+        eq: eqMock,
+      });
+
+      const profiles = await supabaseUserRepository.listActiveSubscribed();
+
+      expect(mockFrom).toHaveBeenCalledWith("users");
+      expect(eqMock).toHaveBeenCalledWith("subscription_status", "active");
+      expect(profiles).toHaveLength(1);
+      expect(profiles[0]).toMatchObject({
+        id: "u1",
+        email: "a@x.com",
+        name: "Ann",
+        familyName: "Fam",
+      });
+    });
+
+    it("throws when Supabase returns an error", async () => {
+      mockFrom.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockResolvedValue({
+          data: null,
+          error: { message: "query failed" },
+        }),
+      });
+
+      await expect(
+        supabaseUserRepository.listActiveSubscribed()
+      ).rejects.toThrow("query failed");
+    });
+  });
 });

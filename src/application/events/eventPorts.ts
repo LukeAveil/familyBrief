@@ -1,3 +1,4 @@
+import type { CalendarEventInsertRow } from "@/domain/calendarImport";
 import type { Event } from "@/types";
 
 export type EventDateRangeFilter = {
@@ -26,4 +27,8 @@ export type EventRepository = {
     payload: CreateManualEventInput
   ) => Promise<Event>;
   deleteForUser: (userId: string, id: string) => Promise<void>;
+  insertExtractedEventsForUser: (
+    userId: string,
+    rows: CalendarEventInsertRow[]
+  ) => Promise<Event[]>;
 };

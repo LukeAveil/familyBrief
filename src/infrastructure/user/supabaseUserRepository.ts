@@ -58,4 +58,18 @@ export const supabaseUserRepository: UserRepository = {
 
     return mapUserRow(data as UserRow);
   },
+
+  async listActiveSubscribed() {
+    const { data, error } = await supabaseAdmin
+      .from("users")
+      .select("id,email,name,family_name")
+      .eq("subscription_status", "active");
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const rows = (data as UserRow[] | null) ?? [];
+    return rows.map(mapUserRow);
+  },
 };

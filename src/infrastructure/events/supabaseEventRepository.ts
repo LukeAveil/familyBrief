@@ -1,6 +1,5 @@
-import type {
-  EventRepository,
-} from "@/application/events/eventPorts";
+import type { EventRepository } from "@/application/events/eventPorts";
+import type { CalendarEventInsertRow } from "@/domain/calendarImport";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import type { Event } from "@/types";
 
@@ -115,5 +114,27 @@ export const supabaseEventRepository: EventRepository = {
     if (error) {
       throw new Error(error.message);
     }
+  },
+
+  async insertExtractedEventsForUser(userId, rows: CalendarEventInsertRow[]) {
+    if (rows.length === 0) {
+      return [];
+    }
+    for (const row of rows) {
+      if (row.user_id !== userId) {
+        throw new Error("Extracted event row user_id mismatch");
+      }
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("events")
+      .insert(rows)
+      .select("*, family_members(id, name, color)");
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return (data as EventRow[] | null)?.map(mapEventRow) ?? [];
   },
 };

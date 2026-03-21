@@ -1,5 +1,6 @@
 import { parseImageOrPdfToEvents } from "@/lib/anthropic";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { runInsertExtractedEventsForUser } from "@/application/events/eventModule";
+import { runGetFamilyMembersForUser } from "@/application/family/familyModule";
 import {
   buildInsertRowsFromExtracted,
   fileToBase64,
@@ -8,10 +9,6 @@ import {
   type FamilyMemberPick,
   type CalendarEventInsertRow,
 } from "@/domain/calendarImport";
-import {
-  mapEventRow,
-  type EventRow,
-} from "@/infrastructure/events/supabaseEventRepository";
 import { syncBriefingsForDates } from "@/services/briefingService";
 import type { Event } from "@/types";
 
@@ -38,34 +35,35 @@ export type ParseImageResult =
 export async function loadFamilyMembers(
   userId: string
 ): Promise<{ ok: true; members: FamilyMemberPick[] } | { ok: false; message: string }> {
-  const { data, error } = await supabaseAdmin
-    .from("family_members")
-    .select("id, name")
-    .eq("user_id", userId);
-
-  if (error) {
-    console.error("parse-image family_members:", error.message);
+  try {
+    const members = await runGetFamilyMembersForUser(userId);
+    return {
+      ok: true,
+      members: members.map((m) => ({ id: m.id, name: m.name })),
+    };
+  } catch (e) {
+    console.error(
+      "parse-image family_members:",
+      e instanceof Error ? e.message : e
+    );
     return { ok: false, message: "Failed to load family members" };
   }
-
-  return { ok: true, members: data ?? [] };
 }
 
 export async function insertCalendarImportEvents(
+  userId: string,
   rows: CalendarEventInsertRow[]
 ): Promise<{ ok: true; events: Event[] } | { ok: false; message: string }> {
-  const { data: inserted, error } = await supabaseAdmin
-    .from("events")
-    .insert(rows)
-    .select("*, family_members(id, name, color)");
-
-  if (error) {
-    console.error("parse-image insert:", error.message);
+  try {
+    const events = await runInsertExtractedEventsForUser(userId, rows);
+    return { ok: true, events };
+  } catch (e) {
+    console.error(
+      "parse-image insert:",
+      e instanceof Error ? e.message : e
+    );
     return { ok: false, message: "Failed to save events" };
   }
-
-  const list = (inserted ?? []) as EventRow[];
-  return { ok: true, events: list.map(mapEventRow) };
 }
 
 /** @deprecated use insertCalendarImportEvents */
@@ -130,7 +128,7 @@ export async function processParseImageUpload(
     return { ok: true, events: [], count: 0 };
   }
 
-  const inserted = await insertCalendarImportEvents(rows);
+  const inserted = await insertCalendarImportEvents(userId, rows);
   if (!inserted.ok) {
     return { ok: false, status: 500, message: inserted.message };
   }

@@ -9,9 +9,11 @@ import {
   toIsoDateString,
 } from "@/lib/briefing/week";
 import { supabaseBriefingRepository } from "@/infrastructure/briefing/supabaseBriefingRepository";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { runGetEventsForUser } from "@/application/events/eventModule";
-import { runGetUserProfile } from "@/application/user/userModule";
+import {
+  runGetActiveSubscribedUsers,
+  runGetUserProfile,
+} from "@/application/user/userModule";
 import type { WeeklyBriefing } from "@/types";
 import type { Event } from "@/types";
 
@@ -121,46 +123,33 @@ export async function getBriefingsForUser(
 }
 
 export async function sendWeeklyBriefingsForActiveUsers() {
-  const { data: users } = await supabaseAdmin
-    .from("users")
-    .select("id, email, name, family_name")
-    .eq("subscription_status", "active");
+  const users = await runGetActiveSubscribedUsers();
 
-  if (!users) {
+  if (!users.length) {
     return { sent: 0, total: 0 };
   }
 
   const results = await Promise.allSettled(
-    users.map(async (user: ActiveUser) => {
+    users.map(async (user) => {
       const weekStart = getWeekStart(getToday());
       const weekEnd = getWeekEnd(weekStart);
 
-      const { data: events } = await supabaseAdmin
-        .from("events")
-        .select("*, family_members(name)")
-        .eq("user_id", user.id)
-        .gte("date", toIsoDateString(weekStart))
-        .lte("date", toIsoDateString(weekEnd))
-        .order("date");
+      const events = await runGetEventsForUser(user.id, {
+        start: toIsoDateString(weekStart),
+        end: toIsoDateString(weekEnd),
+      });
 
-      const formattedEvents = (events || []).map((e: {
-        title: string;
-        date: string;
-        time: string | null;
-        family_members: { name: string } | null;
-        category: string;
-        location: string | null;
-      }) => ({
+      const formattedEvents = events.map((e: Event) => ({
         title: e.title,
         date: e.date,
-        time: e.time ?? undefined,
-        familyMember: e.family_members?.name || "Family",
+        time: e.time,
+        familyMember: e.familyMember?.name ?? "Family",
         category: e.category,
-        location: e.location ?? undefined,
+        location: e.location,
       }));
 
       const briefing = await generateWeeklyBriefing(
-        user.family_name,
+        user.familyName,
         user.name,
         formattedEvents
       );
@@ -176,7 +165,7 @@ export async function sendWeeklyBriefingsForActiveUsers() {
       await sendWeeklyBriefingEmail({
         toEmail: user.email,
         toName: user.name,
-        familyName: user.family_name,
+        familyName: user.familyName,
         briefingContent: briefing,
         weekOf,
         briefingId: saved.id,

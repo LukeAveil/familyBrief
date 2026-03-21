@@ -3,24 +3,21 @@
  */
 import { GET } from "@/app/api/briefing/list/route";
 import { NextRequest } from "next/server";
+import { runListBriefingItemsForUser } from "@/application/briefing/briefingModule";
 import { getAuthedUserIdFromRequest } from "@/lib/apiAuth";
-import { listBriefingItemsForUser } from "@/application/briefing/briefingUseCases";
 
 jest.mock("@/lib/apiAuth", () => ({
   getAuthedUserIdFromRequest: jest.fn(),
 }));
-jest.mock("@/application/briefing/briefingUseCases", () => ({
-  listBriefingItemsForUser: jest.fn(),
-}));
-jest.mock("@/infrastructure/briefing/supabaseBriefingRepository", () => ({
-  supabaseBriefingRepository: {},
+jest.mock("@/application/briefing/briefingModule", () => ({
+  runListBriefingItemsForUser: jest.fn(),
 }));
 
 const mockAuth = getAuthedUserIdFromRequest as jest.MockedFunction<
   typeof getAuthedUserIdFromRequest
 >;
-const mockList = listBriefingItemsForUser as jest.MockedFunction<
-  typeof listBriefingItemsForUser
+const mockList = runListBriefingItemsForUser as jest.MockedFunction<
+  typeof runListBriefingItemsForUser
 >;
 
 describe("GET /api/briefing/list", () => {

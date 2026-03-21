@@ -14,4 +14,5 @@ export type UpsertUserProfileInput = {
 export type UserRepository = {
   getById(userId: string): Promise<UserProfile | null>;
   upsert(userId: string, input: UpsertUserProfileInput): Promise<UserProfile>;
+  listActiveSubscribed(): Promise<UserProfile[]>;
 };

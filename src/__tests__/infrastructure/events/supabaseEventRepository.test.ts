@@ -90,3 +90,82 @@ describe("supabaseEventRepository.listForUser", () => {
     );
   });
 });
+
+describe("supabaseEventRepository.insertExtractedEventsForUser", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const sampleRow = {
+    user_id: "u1",
+    family_member_id: null,
+    title: "T",
+    description: null,
+    date: "2026-03-15",
+    time: null,
+    location: null,
+    category: "school" as const,
+    source: "image" as const,
+    raw_email_id: null,
+  };
+
+  it("returns empty array when rows is empty", async () => {
+    const events = await supabaseEventRepository.insertExtractedEventsForUser(
+      "u1",
+      []
+    );
+    expect(events).toEqual([]);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("inserts rows and maps returned events", async () => {
+    const insertMock = jest.fn().mockReturnValue({
+      select: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: "e1",
+            user_id: "u1",
+            family_member_id: null,
+            title: "T",
+            description: null,
+            date: "2026-03-15",
+            time: null,
+            location: null,
+            category: "school",
+            source: "image",
+            raw_email_id: null,
+            created_at: "2026-03-10T10:00:00.000Z",
+            family_members: null,
+          },
+        ],
+        error: null,
+      }),
+    });
+
+    mockFrom.mockReturnValue({
+      insert: insertMock,
+    });
+
+    const events = await supabaseEventRepository.insertExtractedEventsForUser(
+      "u1",
+      [sampleRow]
+    );
+
+    expect(mockFrom).toHaveBeenCalledWith("events");
+    expect(insertMock).toHaveBeenCalledWith([sampleRow]);
+    expect(events).toHaveLength(1);
+    expect(events[0].id).toBe("e1");
+  });
+
+  it("throws when user_id on a row does not match", async () => {
+    await expect(
+      supabaseEventRepository.insertExtractedEventsForUser("u1", [
+        { ...sampleRow, user_id: "other" },
+      ])
+    ).rejects.toThrow("Extracted event row user_id mismatch");
+  });
+});

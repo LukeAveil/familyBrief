@@ -1,12 +1,11 @@
 import { NextRequest } from "next/server";
-import { listBriefingItemsForUser } from "@/application/briefing/briefingUseCases";
+import { runListBriefingItemsForUser } from "@/application/briefing/briefingModule";
 import { getAuthedUserIdFromRequest } from "@/lib/apiAuth";
 import { jsonResponse } from "@/lib/api/httpZod";
 import {
   briefingListResponseSchema,
   errorResponseSchema,
 } from "@/lib/api/schemas";
-import { supabaseBriefingRepository } from "@/infrastructure/briefing/supabaseBriefingRepository";
 
 export async function GET(_req: NextRequest) {
   const userId = await getAuthedUserIdFromRequest(_req);
@@ -17,10 +16,7 @@ export async function GET(_req: NextRequest) {
   }
 
   try {
-    const items = await listBriefingItemsForUser(
-      userId,
-      supabaseBriefingRepository
-    );
+    const items = await runListBriefingItemsForUser(userId);
     return jsonResponse(
       JSON.parse(JSON.stringify(items)),
       briefingListResponseSchema

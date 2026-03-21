@@ -18,3 +18,9 @@ export async function upsertUserProfile(
 ): Promise<UserProfile> {
   return repo.upsert(userId, input);
 }
+
+export async function listActiveSubscribedUsers(
+  repo: UserRepository
+): Promise<UserProfile[]> {
+  return repo.listActiveSubscribed();
+}
