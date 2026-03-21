@@ -55,7 +55,19 @@ create table public.weekly_briefings (
   week_start date not null,
   content text not null,
   sent_at timestamptz,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  constraint weekly_briefings_user_week_unique unique (user_id, week_start)
+);
+
+-- Atomically upsert a week row; see supabase/migrations for upsert_weekly_briefing()
+
+-- Thumbs up/down on a briefing (observability / product analytics)
+create table public.briefing_feedback (
+  id uuid primary key default gen_random_uuid(),
+  briefing_id uuid references public.weekly_briefings (id) on delete cascade not null,
+  user_id uuid references public.users (id) on delete cascade not null,
+  sentiment text not null check (sentiment in ('up', 'down')),
+  created_at timestamptz not null default now()
 );
 
 -- RLS Policies
@@ -64,9 +76,16 @@ alter table public.family_members enable row level security;
 alter table public.events enable row level security;
 alter table public.parsed_emails enable row level security;
 alter table public.weekly_briefings enable row level security;
+alter table public.briefing_feedback enable row level security;
 
 create policy "Users can manage own data" on public.users for all using (auth.uid() = id);
 create policy "Users can manage own members" on public.family_members for all using (auth.uid() = user_id);
 create policy "Users can manage own events" on public.events for all using (auth.uid() = user_id);
 create policy "Users can view own emails" on public.parsed_emails for select using (auth.uid() = user_id);
 create policy "Users can view own briefings" on public.weekly_briefings for select using (auth.uid() = user_id);
+
+create index briefing_feedback_briefing_id_idx on public.briefing_feedback (briefing_id);
+create policy "Users can insert own feedback" on public.briefing_feedback
+  for insert with check (auth.uid() = user_id);
+create policy "Users can view own feedback" on public.briefing_feedback
+  for select using (auth.uid() = user_id);

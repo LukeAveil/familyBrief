@@ -66,9 +66,6 @@ export async function insertCalendarImportEvents(
   }
 }
 
-/** @deprecated use insertCalendarImportEvents */
-export const insertImageEvents = insertCalendarImportEvents;
-
 /**
  * End-to-end: validate file, resolve MIME, call Claude, insert rows, refresh briefings.
  */

@@ -4,8 +4,9 @@ import {
   errorResponseSchema,
   weeklyBriefingCronResponseSchema,
 } from "@/lib/api/schemas";
+import { sendWeeklyBriefingsForActiveUsers } from "@/services/briefingService";
 
-/** Briefings are not sent by email for now; they are only shown as cards on the briefings page. */
+/** Cron: send weekly briefings to all active subscribers (Bearer CRON_SECRET). */
 export async function POST(_req: NextRequest) {
   const authHeader = _req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -13,5 +14,7 @@ export async function POST(_req: NextRequest) {
       status: 401,
     });
   }
-  return jsonResponse({ sent: 0, total: 0 }, weeklyBriefingCronResponseSchema);
+
+  const result = await sendWeeklyBriefingsForActiveUsers();
+  return jsonResponse(result, weeklyBriefingCronResponseSchema);
 }

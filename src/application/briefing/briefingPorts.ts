@@ -57,6 +57,11 @@ export type BriefingRepository = {
     briefingId: string,
     userId: string
   ) => Promise<BriefingListRow | null>;
+  recordFeedback: (
+    briefingId: string,
+    userId: string,
+    sentiment: "up" | "down"
+  ) => Promise<void>;
 };
 
 export type EventQueryPort = (

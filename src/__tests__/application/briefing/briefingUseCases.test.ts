@@ -32,6 +32,7 @@ describe("generateBriefingForUserWeek", () => {
       sentAt: new Date("2026-03-16T12:00:00.000Z"),
     }),
     getByIdForUser: jest.fn(),
+    recordFeedback: jest.fn(),
   };
 
   const email: WeeklyBriefingEmailPort = jest.fn().mockResolvedValue({
@@ -58,7 +59,6 @@ describe("generateBriefingForUserWeek", () => {
       email,
       getEvents,
       getUser,
-      getFamilyMembers: jest.fn().mockResolvedValue([]),
       generate,
     });
 
@@ -79,7 +79,6 @@ describe("generateBriefingForUserWeek", () => {
       email: emailFail,
       getEvents,
       getUser,
-      getFamilyMembers: jest.fn().mockResolvedValue([]),
       generate: jest.fn().mockResolvedValue("X"),
     });
 
@@ -101,6 +100,7 @@ describe("listBriefingItemsForUser", () => {
       ]),
       upsertForWeek: jest.fn(),
       getByIdForUser: jest.fn(),
+      recordFeedback: jest.fn(),
     };
 
     const items = await listBriefingItemsForUser("u1", repo);
@@ -115,6 +115,7 @@ describe("recordBriefingFeedback", () => {
       listRowsForUser: jest.fn(),
       upsertForWeek: jest.fn(),
       getByIdForUser: jest.fn().mockResolvedValue(null),
+      recordFeedback: jest.fn(),
     };
 
     await expect(
@@ -123,6 +124,7 @@ describe("recordBriefingFeedback", () => {
   });
 
   it("resolves when briefing exists", async () => {
+    const mockRecordFeedback = jest.fn();
     const repo: BriefingRepository = {
       listRowsForUser: jest.fn(),
       upsertForWeek: jest.fn(),
@@ -133,10 +135,12 @@ describe("recordBriefingFeedback", () => {
         sentAt: null,
         createdAt: new Date("2026-03-16T00:00:00.000Z"),
       }),
+      recordFeedback: mockRecordFeedback,
     };
 
     await expect(
       recordBriefingFeedback("u1", "1", "down", { repo })
     ).resolves.toBeUndefined();
+    expect(mockRecordFeedback).toHaveBeenCalledWith("1", "u1", "down");
   });
 });

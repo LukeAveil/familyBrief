@@ -15,6 +15,13 @@ type Row = {
   created_at: string;
 };
 
+type RpcUpsertRow = {
+  id: string;
+  week_start: string;
+  content: string;
+  sent_at: string | null;
+};
+
 function mapRow(r: Row): BriefingListRow {
   return {
     id: r.id,
@@ -22,6 +29,15 @@ function mapRow(r: Row): BriefingListRow {
     content: r.content,
     sentAt: r.sent_at ? new Date(r.sent_at) : null,
     createdAt: new Date(r.created_at),
+  };
+}
+
+function mapUpsertRow(r: RpcUpsertRow): UpsertedBriefing {
+  return {
+    id: r.id,
+    weekStart: parseIsoDate(r.week_start),
+    content: r.content,
+    sentAt: r.sent_at ? new Date(r.sent_at) : null,
   };
 }
 
@@ -44,65 +60,24 @@ export const supabaseBriefingRepository: BriefingRepository = {
     sentAt?: Date | null;
   }): Promise<UpsertedBriefing> {
     const weekKey = toIsoDateString(params.weekStart);
+    const sentAt = params.sentAt;
+    const pSetSent = sentAt !== undefined && sentAt !== null;
 
-    const { data: existing } = await supabaseAdmin
-      .from("weekly_briefings")
-      .select("id, sent_at")
-      .eq("user_id", params.userId)
-      .eq("week_start", weekKey)
-      .maybeSingle();
+    const { data, error } = await supabaseAdmin.rpc("upsert_weekly_briefing", {
+      p_user_id: params.userId,
+      p_week_start: weekKey,
+      p_content: params.content,
+      p_sent_at: pSetSent ? sentAt.toISOString() : null,
+      p_set_sent_at: pSetSent,
+    });
 
-    if (existing) {
-      const patch: Record<string, unknown> = { content: params.content };
-      if (params.sentAt !== undefined && params.sentAt !== null) {
-        patch.sent_at = params.sentAt.toISOString();
-      }
+    if (error) throw new Error(error.message);
 
-      const { error } = await supabaseAdmin
-        .from("weekly_briefings")
-        .update(patch)
-        .eq("id", existing.id);
-
-      if (error) throw new Error(error.message);
-
-      const { data: row } = await supabaseAdmin
-        .from("weekly_briefings")
-        .select("id, week_start, content, sent_at")
-        .eq("id", existing.id)
-        .single();
-
-      if (!row) throw new Error("Briefing not found after update");
-      const r = row as Pick<
-        Row,
-        "id" | "week_start" | "content" | "sent_at"
-      >;
-      return {
-        id: r.id,
-        weekStart: parseIsoDate(r.week_start),
-        content: r.content,
-        sentAt: r.sent_at ? new Date(r.sent_at) : null,
-      };
+    const raw = Array.isArray(data) ? data[0] : data;
+    if (!raw || typeof raw !== "object") {
+      throw new Error("upsert_weekly_briefing returned no row");
     }
-
-    const { data: inserted, error: insErr } = await supabaseAdmin
-      .from("weekly_briefings")
-      .insert({
-        user_id: params.userId,
-        week_start: weekKey,
-        content: params.content,
-        sent_at: params.sentAt ? params.sentAt.toISOString() : null,
-      })
-      .select("id, week_start, content, sent_at")
-      .single();
-
-    if (insErr) throw new Error(insErr.message);
-    const r = inserted as Pick<Row, "id" | "week_start" | "content" | "sent_at">;
-    return {
-      id: r.id,
-      weekStart: parseIsoDate(r.week_start),
-      content: r.content,
-      sentAt: r.sent_at ? new Date(r.sent_at) : null,
-    };
+    return mapUpsertRow(raw as RpcUpsertRow);
   },
 
   async getByIdForUser(
@@ -119,5 +94,19 @@ export const supabaseBriefingRepository: BriefingRepository = {
     if (error) throw new Error(error.message);
     if (!data) return null;
     return mapRow(data as Row);
+  },
+
+  async recordFeedback(
+    briefingId: string,
+    userId: string,
+    sentiment: "up" | "down"
+  ): Promise<void> {
+    const { error } = await supabaseAdmin.from("briefing_feedback").insert({
+      briefing_id: briefingId,
+      user_id: userId,
+      sentiment,
+    });
+
+    if (error) throw new Error(error.message);
   },
 };

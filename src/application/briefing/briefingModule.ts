@@ -2,7 +2,6 @@ import {
   generateBriefingForUserWeek,
   listBriefingItemsForUser,
 } from "@/application/briefing/briefingUseCases";
-import { runGetFamilyMembersForUser } from "@/application/family/familyModule";
 import { runGetEventsForUser } from "@/application/events/eventModule";
 import { runGetUserProfile } from "@/application/user/userModule";
 import { supabaseBriefingRepository } from "@/infrastructure/briefing/supabaseBriefingRepository";
@@ -31,6 +30,5 @@ export function runGenerateBriefingForUserWeek(userId: string) {
         email: profile.email,
       };
     },
-    getFamilyMembers: runGetFamilyMembersForUser,
   });
 }

@@ -20,6 +20,7 @@ jest.mock("@/lib/email", () => ({
 jest.mock("@/infrastructure/briefing/supabaseBriefingRepository", () => ({
   supabaseBriefingRepository: {
     upsertForWeek: jest.fn(),
+    recordFeedback: jest.fn(),
   },
 }));
 

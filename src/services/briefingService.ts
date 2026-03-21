@@ -17,20 +17,6 @@ import {
 import type { WeeklyBriefing } from "@/types";
 import type { Event } from "@/types";
 
-export {
-  getWeekStart,
-  getWeekEnd,
-  parseIsoDate,
-  toIsoDateString,
-} from "@/lib/briefing/week";
-
-type ActiveUser = {
-  id: string;
-  email: string;
-  name: string;
-  family_name: string;
-};
-
 /**
  * Ensure a briefing exists for the week containing eventDate.
  * If none exists, create one with generated content; if it exists, update content to include all events that week.
