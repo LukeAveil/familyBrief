@@ -38,11 +38,20 @@ export interface Event {
 export interface WeeklyBriefing {
   id: string;
   userId: string;
-  weekStart: string; // ISO date
+  weekStart: Date;
   content: string;
   events: Event[];
-  sentAt?: string;
-  createdAt: string;
+  sentAt?: Date;
+  createdAt: Date;
+}
+
+/** Slim list row (no nested events) for dashboard sidebar + API list. */
+export interface BriefingListItem {
+  id: string;
+  weekStart: Date;
+  content: string;
+  sentAt?: Date;
+  createdAt: Date;
 }
 
 export interface ParsedEmail {

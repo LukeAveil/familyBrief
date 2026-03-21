@@ -4,85 +4,89 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import ErrorMessage from "@/components/ErrorMessage";
 import EmptyState from "@/components/EmptyState";
 import { useBriefings } from "@/hooks/useBriefings";
-import type { Event } from "@/types";
-
-const CATEGORY_ICONS: Record<string, string> = {
-  school: "📚",
-  activity: "⚽",
-  medical: "🏥",
-  social: "🎉",
-  other: "📌",
-};
+import {
+  getToday,
+  getWeekStart,
+  parseBriefingSections,
+} from "@/lib/briefing";
+import { getAccessToken } from "@/services/authClient";
+import moment from "moment";
+import { useCallback, useState } from "react";
 
 /** Format full week range (Mon–Sun) e.g. "10–16 March 2025". */
-function formatWeekRange(weekStart: string): string {
-  const mon = new Date(weekStart + "T12:00:00");
-  const sun = new Date(mon);
-  sun.setDate(sun.getDate() + 6);
-  const sameMonth = mon.getMonth() === sun.getMonth();
-  const sameYear = mon.getFullYear() === sun.getFullYear();
+function formatWeekRange(weekStart: Date): string {
+  const mon = moment(weekStart);
+  const sun = moment(weekStart).add(6, "days");
+  const sameMonth = mon.month() === sun.month();
+  const sameYear = mon.year() === sun.year();
   if (sameMonth && sameYear) {
-    return `${mon.getDate()}–${sun.getDate()} ${sun.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}`;
+    return `${mon.date()}–${sun.date()} ${sun.format("MMMM YYYY")}`;
   }
   if (sameYear) {
-    return `${mon.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${sun.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`;
+    return `${mon.format("D MMM")} – ${sun.format("D MMMM YYYY")}`;
   }
-  return `${mon.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} – ${sun.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`;
+  return `${mon.format("D MMM YYYY")} – ${sun.format("D MMMM YYYY")}`;
 }
 
-function EventList({ events }: { events: Event[] }) {
-  if (events.length === 0) return null;
-  return (
-    <ul className="event-list" role="list">
-      {events
-        .slice()
-        .sort((a, b) => a.date.localeCompare(b.date) || (a.time || "").localeCompare(b.time || ""))
-        .map((event) => (
-          <li
-            key={event.id}
-            className="event-card"
-            style={{
-              borderLeftColor: event.familyMember?.color || "#f59e0b",
-            }}
-          >
-            <div className="event-card-top">
-              <span className="event-cat-icon" aria-hidden>
-                {CATEGORY_ICONS[event.category] || "📌"}
-              </span>
-              <span className="event-title">{event.title}</span>
-            </div>
-            <div className="event-meta">
-              <span className="event-date">
-                {new Date(event.date + "T12:00:00").toLocaleDateString("en-GB", {
-                  weekday: "short",
-                  day: "numeric",
-                  month: "short",
-                })}
-              </span>
-              {event.time && <span className="event-time">⏰ {event.time}</span>}
-              {event.location && (
-                <span className="event-loc">📍 {event.location}</span>
-              )}
-              {event.familyMember && (
-                <span
-                  className="event-member"
-                  style={{ color: event.familyMember.color }}
-                >
-                  ● {event.familyMember.name}
-                </span>
-              )}
-            </div>
-            {event.description && (
-              <p className="event-desc">{event.description}</p>
-            )}
-          </li>
-        ))}
-    </ul>
-  );
+function previewLine(content: string): string {
+  const line = content.trim().split(/\r?\n/)[0] ?? "";
+  return line.length > 100 ? `${line.slice(0, 97)}…` : line;
 }
 
 export default function BriefingsPage() {
-  const { briefings, loading, error, refetch } = useBriefings();
+  const {
+    briefings,
+    loading,
+    error,
+    refetch,
+    currentBriefing,
+    selectBriefing,
+    selectedId,
+    generateBriefing,
+    generating,
+    generateError,
+  } = useBriefings();
+
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+
+  const today = getToday();
+  const thisWeekStart = getWeekStart(today);
+  const hasThisWeekBriefing = briefings.some((b) =>
+    moment(b.weekStart).isSame(thisWeekStart, "day")
+  );
+
+  const sendFeedback = useCallback(
+    async (sentiment: "up" | "down") => {
+      if (!currentBriefing) return;
+      setFeedbackMsg(null);
+      const token = await getAccessToken();
+      const res = await fetch("/api/observability/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          briefingId: currentBriefing.id,
+          sentiment,
+        }),
+      });
+      if (res.ok) {
+        setFeedbackMsg("Thanks — we recorded your feedback.");
+      } else {
+        setFeedbackMsg("Could not send feedback. Try again later.");
+      }
+    },
+    [currentBriefing]
+  );
+
+  const handleGenerate = async () => {
+    try {
+      await generateBriefing();
+    } catch {
+      /* handled via generateError */
+    }
+  };
 
   if (loading) {
     return (
@@ -109,57 +113,147 @@ export default function BriefingsPage() {
     );
   }
 
-  if (briefings.length === 0) {
-    return (
-      <DashboardLayout>
-        <div className="dashboard-shell">
-          <h1 className="dash-name">Briefings</h1>
-          <EmptyState
-            icon="◎"
-            title="No briefings yet"
-            description="When you add the first event for a week, a briefing for that week will appear here. Add events from the calendar to get started."
-            action={<a href="/dashboard" className="btn-save">Go to calendar</a>}
-          />
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   return (
     <DashboardLayout>
       <div className="dashboard-shell">
         <h1 className="dash-name">Briefings</h1>
         <p className="dash-greeting">
-          Your weekly briefings. Each one shows all events for that week.
+          Your personalised week ahead — generated for your family and emailed to you.
         </p>
 
-        <div className="briefings-list">
-          {briefings.map((b) => (
-            <article
-              key={b.id}
-              className="briefing-card"
-              aria-label={`Briefing for week ${formatWeekRange(b.weekStart)}`}
+        <div className="briefings-toolbar">
+          <button
+            type="button"
+            className="btn-briefing-cta"
+            onClick={() => void handleGenerate()}
+            disabled={generating}
+          >
+            {generating
+              ? "Generating your briefing…"
+              : hasThisWeekBriefing
+                ? "Regenerate this week"
+                : "Generate this week's briefing"}
+          </button>
+          {hasThisWeekBriefing && (
+            <button
+              type="button"
+              className="btn-briefing-secondary"
+              onClick={() => void handleGenerate()}
+              disabled={generating}
+              title="Sends the latest briefing to your email again"
             >
-              <header className="briefing-card-header">
-                <h2 className="briefing-week">
-                  Week {formatWeekRange(b.weekStart)}
-                </h2>
-              </header>
-              <div className="briefing-content">
-                <p className="briefing-text">{b.content}</p>
-              </div>
-              {b.events.length > 0 && (
-                <section className="briefing-events">
-                  <h3 className="briefing-events-title">
-                    Events this week ({b.events.length})
-                  </h3>
-                  <EventList events={b.events} />
-                </section>
-              )}
-            </article>
-          ))}
+              Send to email
+            </button>
+          )}
+          <span className="briefings-email-note">
+            Same action generates AI content, saves it, and emails you (if email delivery is configured).
+          </span>
         </div>
+
+        {generateError && (
+          <p style={{ color: "#b91c1c", marginBottom: 16, fontSize: 14 }}>
+            {generateError.message}
+          </p>
+        )}
+
+        {briefings.length === 0 ? (
+          <EmptyState
+            icon="◎"
+            title="No briefings yet"
+            description="Generate your first weekly briefing for this calendar week. It uses your calendar events and is sent to your email."
+            action={
+              <button
+                type="button"
+                className="btn-briefing-cta"
+                onClick={() => void handleGenerate()}
+                disabled={generating}
+              >
+                {generating ? "Generating…" : "Generate this week's briefing"}
+              </button>
+            }
+          />
+        ) : (
+          <div className="briefings-layout">
+            <div className="briefings-main">
+              {currentBriefing ? (
+                <article className="briefings-main-card">
+                  <h2 className="briefings-heading-week">
+                    Week of {formatWeekRange(currentBriefing.weekStart)}
+                  </h2>
+                  <BriefingBody content={currentBriefing.content} />
+                  <div className="briefing-feedback-row">
+                    <span style={{ fontSize: 14, color: "var(--ink-soft)" }}>
+                      Was this helpful?
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Thumbs up"
+                      onClick={() => void sendFeedback("up")}
+                    >
+                      👍
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Thumbs down"
+                      onClick={() => void sendFeedback("down")}
+                    >
+                      👎
+                    </button>
+                    {feedbackMsg && (
+                      <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                        {feedbackMsg}
+                      </span>
+                    )}
+                  </div>
+                </article>
+              ) : null}
+            </div>
+
+            <aside className="briefings-sidebar">
+              <div className="briefings-sidebar-title">History</div>
+              <div className="briefings-sidebar-list">
+                {briefings.map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    className={`briefings-sidebar-item ${currentBriefing?.id === b.id ? "active" : ""}`}
+                    onClick={() => selectBriefing(b.id)}
+                  >
+                    <div className="briefings-sidebar-date">
+                      {formatWeekRange(b.weekStart)}
+                    </div>
+                    <div className="briefings-sidebar-preview">
+                      {previewLine(b.content)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </aside>
+          </div>
+        )}
       </div>
     </DashboardLayout>
+  );
+}
+
+function BriefingBody({ content }: { content: string }) {
+  const sections = parseBriefingSections(content);
+  if (sections.length === 0) {
+    return (
+      <div className="briefing-section-body" style={{ whiteSpace: "pre-wrap" }}>
+        {content}
+      </div>
+    );
+  }
+  return (
+    <div>
+      {sections.map((sec, i) => (
+        <div key={`${sec.title}-${i}`} className="briefing-section-block">
+          {i > 0 && <hr className="briefing-section-rule" aria-hidden />}
+          <h3 className="briefing-section-heading">{sec.title}</h3>
+          <div className="briefing-section-body">{sec.body}</div>
+        </div>
+      ))}
+    </div>
   );
 }

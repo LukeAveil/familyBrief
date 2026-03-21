@@ -1,7 +1,8 @@
 import { sendWeeklyBriefingsForActiveUsers } from "@/services/briefingService";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { generateWeeklyBriefing } from "@/lib/anthropic";
-import { sendWeeklyBriefing } from "@/lib/email";
+import { sendWeeklyBriefingEmail } from "@/lib/email";
+import { supabaseBriefingRepository } from "@/infrastructure/briefing/supabaseBriefingRepository";
 
 jest.mock("@/lib/supabaseAdmin", () => ({
   supabaseAdmin: {
@@ -12,17 +13,29 @@ jest.mock("@/lib/anthropic", () => ({
   generateWeeklyBriefing: jest.fn(),
 }));
 jest.mock("@/lib/email", () => ({
-  sendWeeklyBriefing: jest.fn(),
+  sendWeeklyBriefingEmail: jest.fn(),
+}));
+jest.mock("@/infrastructure/briefing/supabaseBriefingRepository", () => ({
+  supabaseBriefingRepository: {
+    upsertForWeek: jest.fn(),
+  },
 }));
 
 const mockFrom = supabaseAdmin.from as jest.Mock;
 const mockGenerateWeeklyBriefing = generateWeeklyBriefing as jest.Mock;
-const mockSendWeeklyBriefing = sendWeeklyBriefing as jest.Mock;
+const mockSendWeeklyBriefingEmail = sendWeeklyBriefingEmail as jest.Mock;
+const mockUpsert = supabaseBriefingRepository.upsertForWeek as jest.Mock;
 
 describe("briefingService.sendWeeklyBriefingsForActiveUsers", () => {
   beforeEach(() => {
     mockGenerateWeeklyBriefing.mockResolvedValue("Your week ahead...");
-    mockSendWeeklyBriefing.mockResolvedValue({});
+    mockSendWeeklyBriefingEmail.mockResolvedValue({ ok: true });
+    mockUpsert.mockResolvedValue({
+      id: "briefing-1",
+      weekStart: new Date("2026-03-16T12:00:00.000Z"),
+      content: "Your week ahead...",
+      sentAt: new Date("2026-03-17T12:00:00.000Z"),
+    });
   });
 
   afterEach(() => {
@@ -44,7 +57,7 @@ describe("briefingService.sendWeeklyBriefingsForActiveUsers", () => {
     expect(result).toEqual({ sent: 0, total: 0 });
   });
 
-  it("fetches active users, generates briefing, sends email, and inserts record", async () => {
+  it("fetches active users, generates briefing, sends email, and upserts record", async () => {
     const users = [
       {
         id: "u1",
@@ -65,9 +78,7 @@ describe("briefingService.sendWeeklyBriefingsForActiveUsers", () => {
       },
     ];
 
-    let fromCallCount = 0;
     mockFrom.mockImplementation((table: string) => {
-      fromCallCount++;
       if (table === "users") {
         return {
           select: jest.fn().mockReturnThis(),
@@ -81,11 +92,6 @@ describe("briefingService.sendWeeklyBriefingsForActiveUsers", () => {
           gte: jest.fn().mockReturnThis(),
           lte: jest.fn().mockReturnThis(),
           order: jest.fn().mockResolvedValue({ data: events, error: null }),
-        };
-      }
-      if (table === "weekly_briefings") {
-        return {
-          insert: jest.fn().mockResolvedValue({ data: null, error: null }),
         };
       }
       return {};
@@ -108,13 +114,16 @@ describe("briefingService.sendWeeklyBriefingsForActiveUsers", () => {
         }),
       ])
     );
-    expect(mockSendWeeklyBriefing).toHaveBeenCalledWith(
-      "parent@example.com",
-      "Jane",
-      "Your week ahead...",
-      expect.any(String)
+    expect(mockUpsert).toHaveBeenCalled();
+    expect(mockSendWeeklyBriefingEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toEmail: "parent@example.com",
+        toName: "Jane",
+        familyName: "The Smiths",
+        briefingContent: "Your week ahead...",
+        briefingId: "briefing-1",
+      })
     );
-    expect(mockFrom).toHaveBeenCalledWith("weekly_briefings");
   });
 
   it("returns sent count excluding rejected promises", async () => {
@@ -140,16 +149,16 @@ describe("briefingService.sendWeeklyBriefingsForActiveUsers", () => {
           order: jest.fn().mockResolvedValue({ data: [], error: null }),
         };
       }
-      if (table === "weekly_briefings") {
-        return {
-          insert: jest.fn().mockResolvedValue({ data: null, error: null }),
-        };
-      }
       return {};
     });
-    mockSendWeeklyBriefing
-      .mockResolvedValueOnce({})
-      .mockRejectedValueOnce(new Error("Resend failed"));
+    mockUpsert
+      .mockResolvedValueOnce({
+        id: "b1",
+        weekStart: new Date("2026-03-16T12:00:00.000Z"),
+        content: "c1",
+        sentAt: null,
+      })
+      .mockRejectedValueOnce(new Error("upsert failed"));
 
     const result = await sendWeeklyBriefingsForActiveUsers();
     expect(result).toEqual({ sent: 1, total: 2 });
