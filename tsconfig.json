@@ -20,12 +20,11 @@
     "paths": {
       "@/*": [
         "src/*"
+      ],
+      "next/server": [
+        "./node_modules/next/server.d.ts"
       ]
     },
-    "types": [
-      "react",
-      "node"
-    ],
     "incremental": true,
     "plugins": [
       {
