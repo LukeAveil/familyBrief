@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthedUserIdFromRequest } from "@/lib/apiAuth";
 import {
-  createFamilyMemberForUser,
-  getFamilyMembersForUser,
-} from "@/services/familyService";
+  runCreateFamilyMemberForUser,
+  runGetFamilyMembersForUser,
+} from "@/application/family/familyModule";
 
 export async function GET(req: NextRequest) {
   const userId = await getAuthedUserIdFromRequest(req);
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const members = await getFamilyMembersForUser(userId);
+    const members = await runGetFamilyMembersForUser(userId);
     return NextResponse.json(members);
   } catch (error: any) {
     return NextResponse.json(
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
 
   try {
-    const member = await createFamilyMemberForUser(userId, {
+    const member = await runCreateFamilyMemberForUser(userId, {
       name: body.name,
       role: body.role,
       age: body.age,

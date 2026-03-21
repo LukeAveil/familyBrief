@@ -11,15 +11,14 @@ import {
   getWeekEnd,
   getWeekStart,
 } from "@/lib/briefing/week";
-import { getFamilyMembersForUser } from "@/services/familyService";
 import { getUserProfile } from "@/services/userService";
-import type { BriefingListItem } from "@/types";
-import type { Event } from "@/types";
+import type { BriefingListItem, Event, FamilyMember } from "@/types";
 
 export type GenerateBriefingDeps = {
   repo: BriefingRepository;
   email: WeeklyBriefingEmailPort;
   getEvents: EventQueryPort;
+  getFamilyMembers: (userId: string) => Promise<FamilyMember[]>;
   generate?: BriefingGeneratorPort;
 };
 
@@ -58,7 +57,7 @@ export async function generateBriefingForUserWeek(
     throw new Error("User profile not found");
   }
 
-  await getFamilyMembersForUser(userId);
+  await deps.getFamilyMembers(userId);
 
   const today = getToday();
   const weekStart = getWeekStart(today);

@@ -8,7 +8,10 @@ import {
   type FamilyMemberPick,
   type CalendarEventInsertRow,
 } from "@/domain/calendarImport";
-import { mapEventRow, type EventRow } from "@/services/eventService";
+import {
+  mapEventRow,
+  type EventRow,
+} from "@/infrastructure/events/supabaseEventRepository";
 import { syncBriefingsForDates } from "@/services/briefingService";
 import type { Event } from "@/types";
 

@@ -1,4 +1,4 @@
-import { getEventsForUser } from "@/services/eventService";
+import { supabaseEventRepository } from "@/infrastructure/events/supabaseEventRepository";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 jest.mock("@/lib/supabaseAdmin", () => ({
@@ -9,7 +9,7 @@ jest.mock("@/lib/supabaseAdmin", () => ({
 
 const mockFrom = supabaseAdmin.from as jest.Mock;
 
-describe("eventService.getEventsForUser", () => {
+describe("supabaseEventRepository.listForUser", () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -50,7 +50,7 @@ describe("eventService.getEventsForUser", () => {
       lte: jest.fn().mockReturnThis(),
     });
 
-    const events = await getEventsForUser("u1");
+    const events = await supabaseEventRepository.listForUser("u1");
 
     expect(mockFrom).toHaveBeenCalledWith("events");
     expect(selectMock).toHaveBeenCalledWith("*, family_members(id, name, color)");
@@ -85,7 +85,8 @@ describe("eventService.getEventsForUser", () => {
       lte: jest.fn().mockReturnThis(),
     });
 
-    await expect(getEventsForUser("u1")).rejects.toThrow("boom");
+    await expect(supabaseEventRepository.listForUser("u1")).rejects.toThrow(
+      "boom"
+    );
   });
 });
-

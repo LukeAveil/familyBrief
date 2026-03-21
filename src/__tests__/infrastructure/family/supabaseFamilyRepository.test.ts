@@ -1,4 +1,4 @@
-import { getFamilyMembersForUser } from "@/services/familyService";
+import { supabaseFamilyRepository } from "@/infrastructure/family/supabaseFamilyRepository";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 jest.mock("@/lib/supabaseAdmin", () => ({
@@ -9,7 +9,7 @@ jest.mock("@/lib/supabaseAdmin", () => ({
 
 const mockFrom = supabaseAdmin.from as jest.Mock;
 
-describe("familyService.getFamilyMembersForUser", () => {
+describe("supabaseFamilyRepository.listForUser", () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -35,7 +35,7 @@ describe("familyService.getFamilyMembersForUser", () => {
       eq: eqMock,
     });
 
-    const members = await getFamilyMembersForUser("u1");
+    const members = await supabaseFamilyRepository.listForUser("u1");
 
     expect(mockFrom).toHaveBeenCalledWith("family_members");
     expect(selectMock).toHaveBeenCalledWith("*");
@@ -60,7 +60,8 @@ describe("familyService.getFamilyMembersForUser", () => {
       }),
     });
 
-    await expect(getFamilyMembersForUser("u1")).rejects.toThrow("boom");
+    await expect(supabaseFamilyRepository.listForUser("u1")).rejects.toThrow(
+      "boom"
+    );
   });
 });
-

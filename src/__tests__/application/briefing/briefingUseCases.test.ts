@@ -14,10 +14,6 @@ import { toIsoDateString } from "@/lib/briefing/week";
 jest.mock("@/services/userService", () => ({
   getUserProfile: jest.fn(),
 }));
-jest.mock("@/services/familyService", () => ({
-  getFamilyMembersForUser: jest.fn().mockResolvedValue([]),
-}));
-
 jest.mock("@/lib/briefing/week", () => {
   const actual = jest.requireActual<typeof import("@/lib/briefing/week")>(
     "@/lib/briefing/week"
@@ -69,6 +65,7 @@ describe("generateBriefingForUserWeek", () => {
       repo,
       email,
       getEvents,
+      getFamilyMembers: jest.fn().mockResolvedValue([]),
       generate,
     });
 
@@ -88,6 +85,7 @@ describe("generateBriefingForUserWeek", () => {
       repo,
       email: emailFail,
       getEvents,
+      getFamilyMembers: jest.fn().mockResolvedValue([]),
       generate: jest.fn().mockResolvedValue("X"),
     });
 

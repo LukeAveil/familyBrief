@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthedUserIdFromRequest } from "@/lib/apiAuth";
 import {
-  createManualEventForUser,
-  deleteEventForUser,
-  getEventForUser,
-  getEventsForUser,
-} from "@/services/eventService";
+  runCreateManualEventForUser,
+  runDeleteEventForUser,
+  runGetEventForUser,
+  runGetEventsForUser,
+} from "@/application/events/eventModule";
 import { syncBriefingsForDates } from "@/services/briefingService";
 
 export async function GET(req: NextRequest) {
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const end = searchParams.get("end");
 
   try {
-    const events = await getEventsForUser(userId, { start, end });
+    const events = await runGetEventsForUser(userId, { start, end });
     return NextResponse.json(events);
   } catch (error: any) {
     return NextResponse.json(
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
 
   try {
-    const event = await createManualEventForUser(userId, {
+    const event = await runCreateManualEventForUser(userId, {
       title: body.title,
       date: body.date,
       time: body.time,
@@ -74,8 +74,8 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    const event = await getEventForUser(userId, id);
-    await deleteEventForUser(userId, id);
+    const event = await runGetEventForUser(userId, id);
+    await runDeleteEventForUser(userId, id);
     if (event?.date) {
       try {
         await syncBriefingsForDates(userId, [event.date]);

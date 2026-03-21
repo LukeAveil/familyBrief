@@ -10,7 +10,7 @@ import {
 } from "@/lib/briefing/week";
 import { supabaseBriefingRepository } from "@/infrastructure/briefing/supabaseBriefingRepository";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { getEventsForUser } from "@/services/eventService";
+import { runGetEventsForUser } from "@/application/events/eventModule";
 import { getUserProfile } from "@/services/userService";
 import type { WeeklyBriefing } from "@/types";
 import type { Event } from "@/types";
@@ -43,7 +43,7 @@ export async function ensureBriefingForWeek(
   const profile = await getUserProfile(userId);
   if (!profile) return;
 
-  const events = await getEventsForUser(userId, {
+  const events = await runGetEventsForUser(userId, {
     start: toIsoDateString(weekStart),
     end: toIsoDateString(weekEnd),
   });
@@ -103,7 +103,7 @@ export async function getBriefingsForUser(
   const result: WeeklyBriefing[] = [];
   for (const row of rows) {
     const weekEnd = getWeekEnd(row.weekStart);
-    const events = await getEventsForUser(userId, {
+    const events = await runGetEventsForUser(userId, {
       start: toIsoDateString(row.weekStart),
       end: toIsoDateString(weekEnd),
     });
