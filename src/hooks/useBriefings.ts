@@ -80,7 +80,7 @@ export function useBriefings() {
     queryFn: fetchBriefings,
   });
 
-  const briefings = data ?? [];
+  const briefings = useMemo(() => data ?? [], [data]);
 
   const currentBriefing = useMemo(() => {
     if (briefings.length === 0) return null;

@@ -1,8 +1,9 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
-export default function CheckEmailPage() {
+function CheckEmailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const email = searchParams?.get("email") ?? "";
@@ -46,6 +47,22 @@ export default function CheckEmailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CheckEmailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="onboarding-shell">
+          <div className="onboarding-card">
+            <p className="ob-subtitle">Loading…</p>
+          </div>
+        </div>
+      }
+    >
+      <CheckEmailContent />
+    </Suspense>
   );
 }
 

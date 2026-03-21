@@ -10,8 +10,18 @@ interface Props {
   onClose: () => void;
 }
 
+type EventFormState = {
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  category: Event["category"];
+  familyMemberId: string;
+  description: string;
+};
+
 export default function AddEventModal({ members, selectedDate, onAdd, onClose }: Props) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<EventFormState>({
     title: "",
     date: selectedDate.toISOString().split("T")[0],
     time: "",
@@ -72,7 +82,7 @@ export default function AddEventModal({ members, selectedDate, onAdd, onClose }:
           <div className="form-row">
             <div className="form-field">
               <label htmlFor="add-event-category">Category</label>
-              <select id="add-event-category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} aria-label="Event category">
+              <select id="add-event-category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as Event["category"] })} aria-label="Event category">
                 <option value="school">📚 School</option>
                 <option value="activity">⚽ Activity</option>
                 <option value="medical">🏥 Medical</option>

@@ -1,5 +1,7 @@
 # FamilyBrief 🗓️
 
+![CI](https://github.com/LukeAveil/familyBrief/actions/workflows/ci.yml/badge.svg)
+
 > Your family's AI chief of staff
 
 ## Why this project exists
@@ -285,6 +287,14 @@ cp .env.example .env.local
 npm run dev
 ```
 
+## GitHub Actions CI
+
+Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on **push** and **pull_request** to **`main`**: checkout, Node from [`.nvmrc`](.nvmrc) with npm caching, `npm ci`, `npx tsc --noEmit`, ESLint (`next lint --max-warnings 0`), `npm test -- --coverage --ci`, and `npm run build`. Playwright E2E is not part of this workflow.
+
+The job sets **dummy string values** for the same variables as `.env.example` (hardcoded in the workflow) so typecheck, tests, and `next build` can run without GitHub secrets. Use real keys in `.env.local` for local development and in your host (e.g. Vercel) for production.
+
+The ESLint step installs `eslint@8` and `eslint-config-next@14.2.0` only on the runner (not added to `package.json`) so `next lint` can run without interactive setup.
+
 ## E2E tests (Playwright)
 
 Run `npm run test:e2e` (requires the dev server or will start it automatically when not in CI). The spec covers auth and check-email pages, and an optional **signed-in flow** (login → dashboard → add event) when `E2E_LOGIN_EMAIL` and `E2E_LOGIN_PASSWORD` are set.
@@ -305,7 +315,7 @@ Deploy to Vercel. Set up a cron job (Vercel Cron or GitHub Actions) to call `/ap
 - [x] Add component tests for key calendar UI (`CalendarGrid`, `EventSidebar`, `AddEventModal`)
 - [x] Add E2E test for signup → onboarding → first event flow
 - [x] Improve accessibility (focus states, ARIA roles, keyboard navigation across calendar)
-- [ ] Add CI (GitHub Actions) to run tests and lint on every push/PR
+- [x] Add CI (GitHub Actions) to run tests and lint on every push/PR
 - [ ] Track and enforce minimum test coverage thresholds over time
 
 ## Auth & Onboarding – Happy Path

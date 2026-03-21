@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-dummy-supabase-anon-key"
+      SUPABASE_SERVICE_ROLE_KEY: "ci-dummy-supabase-service-role-key"
+      ANTHROPIC_API_KEY: "ci-dummy-anthropic-api-key"
+      STRIPE_SECRET_KEY: "sk_test_ci_dummy"
+      STRIPE_MONTHLY_PRICE_ID: "price_ci_dummy"
+      STRIPE_WEBHOOK_SECRET: "whsec_ci_dummy"
+      RESEND_API_KEY: "re_ci_dummy"
+      CRON_SECRET: "ci-dummy-cron-secret"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      # Ephemeral ESLint (not in package.json) so `next lint` runs non-interactively; pin ESLint 8 for Next 14.
+      - name: ESLint
+        run: |
+          npm install --no-save eslint@8 eslint-config-next@14.2.0
+          printf '%s\n' '{"extends":"next/core-web-vitals"}' > .eslintrc.json
+          npx next lint --max-warnings 0
+
+      - name: Unit tests
+        run: npm test -- --coverage --ci
+
+      - name: Next.js build
+        run: npm run build
