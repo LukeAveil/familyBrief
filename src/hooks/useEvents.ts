@@ -52,8 +52,17 @@ async function createEvent(event: Partial<Event>): Promise<Event> {
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error("Please sign in again.");
+    }
     const body = await res.json().catch(() => null);
-    const message = body?.error ?? "Failed to add event";
+    const raw = body?.error;
+    const message =
+      typeof raw === "string"
+        ? raw
+        : typeof raw === "object" && raw?.message
+          ? String(raw.message)
+          : "Failed to add event";
     throw new Error(message);
   }
 
@@ -74,8 +83,11 @@ async function removeEvent(id: string): Promise<void> {
   });
 
   if (!res.ok) {
+    if (res.status === 401) throw new Error("Please sign in again.");
     const body = await res.json().catch(() => null);
-    const message = body?.error ?? "Failed to delete event";
+    const raw = body?.error;
+    const message =
+      typeof raw === "string" ? raw : raw?.message ?? "Failed to delete event";
     throw new Error(message);
   }
 }
@@ -97,6 +109,7 @@ export function useEvents(start?: string, end?: string) {
     mutationFn: createEvent,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["events"] });
+      queryClient.invalidateQueries({ queryKey: ["briefings"] });
     },
   });
 
@@ -104,6 +117,7 @@ export function useEvents(start?: string, end?: string) {
     mutationFn: removeEvent,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["events"] });
+      queryClient.invalidateQueries({ queryKey: ["briefings"] });
     },
   });
 

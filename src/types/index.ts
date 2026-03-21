@@ -30,7 +30,7 @@ export interface Event {
   time?: string;
   location?: string;
   category: 'school' | 'activity' | 'medical' | 'social' | 'other';
-  source: 'manual' | 'email';
+  source: 'manual' | 'email' | 'image';
   rawEmailId?: string;
   createdAt: string; // ISO timestamp
 }

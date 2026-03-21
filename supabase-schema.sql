@@ -32,7 +32,7 @@ create table public.events (
   time text,
   location text,
   category text check (category in ('school', 'activity', 'medical', 'social', 'other')),
-  source text check (source in ('manual', 'email')) default 'manual',
+  source text check (source in ('manual', 'email', 'image')) default 'manual',
   raw_email_id uuid,
   created_at timestamptz default now()
 );

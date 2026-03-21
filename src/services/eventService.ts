@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { Event } from "@/types";
 
-type EventRow = {
+export type EventRow = {
   id: string;
   user_id: string;
   family_member_id: string | null;
@@ -11,7 +11,7 @@ type EventRow = {
   time: string | null;
   location: string | null;
   category: "school" | "activity" | "medical" | "social" | "other";
-  source: "manual" | "email";
+  source: "manual" | "email" | "image";
   raw_email_id: string | null;
   created_at: string;
   family_members?: {
@@ -21,7 +21,7 @@ type EventRow = {
   } | null;
 };
 
-function mapEventRow(row: EventRow): Event {
+export function mapEventRow(row: EventRow): Event {
   return {
     id: row.id,
     userId: row.user_id,
@@ -65,6 +65,22 @@ export async function getEventsForUser(
   }
 
   return (data as EventRow[] | null)?.map(mapEventRow) ?? [];
+}
+
+export async function getEventForUser(
+  userId: string,
+  id: string
+): Promise<Event | null> {
+  const { data, error } = await supabaseAdmin
+    .from("events")
+    .select("*, family_members(id, name, color)")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return mapEventRow(data as EventRow);
 }
 
 export async function createManualEventForUser(

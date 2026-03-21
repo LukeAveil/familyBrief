@@ -11,6 +11,7 @@ import { useState } from "react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ErrorMessage from "@/components/ErrorMessage";
 import EmptyState from "@/components/EmptyState";
+import ImageUploadButton from "@/components/upload/ImageUploadButton";
 
 export default function DashboardPage() {
   const today = new Date();
@@ -76,9 +77,12 @@ export default function DashboardPage() {
             <span className="dash-greeting">Good morning,</span>
             <h1 className="dash-name">The Family Brief</h1>
           </div>
-          <button className="add-btn" onClick={() => setShowAddEvent(true)}>
-            <span>+</span> Add Event
-          </button>
+          <div className="dash-header-actions">
+            <ImageUploadButton onSuccess={() => refetch()} />
+            <button className="add-btn" onClick={() => setShowAddEvent(true)}>
+              <span>+</span> Add Event
+            </button>
+          </div>
         </header>
 
         <WeekStrip

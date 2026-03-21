@@ -1,10 +1,28 @@
 import { supabase } from "@/lib/supabase";
 
 export async function getAccessToken(): Promise<string | null> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
+  try {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    if (error) {
+      console.warn("Supabase getSession error:", error.message);
+      return null;
+    }
+    return session?.access_token ?? null;
+  } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    if (
+      typeof msg === "string" &&
+      (msg.includes("x-api-key") || msg.includes("authentication_error"))
+    ) {
+      console.error(
+        "Supabase auth config error. Check NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local"
+      );
+    }
+    return null;
+  }
 }
 
 export async function logout(): Promise<void> {
