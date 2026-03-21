@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getAuthedUserIdFromRequest } from "@/lib/apiAuth";
 import {
   runCreateManualEventForUser,
@@ -6,35 +6,59 @@ import {
   runGetEventForUser,
   runGetEventsForUser,
 } from "@/application/events/eventModule";
+import { jsonResponse, parseJsonBody, parseSearchParams } from "@/lib/api/httpZod";
+import {
+  createEventPostBodySchema,
+  deleteEventSuccessResponseSchema,
+  errorResponseSchema,
+  eventListResponseSchema,
+  eventResponseSchema,
+  eventsDeleteQuerySchema,
+  eventsGetQuerySchema,
+} from "@/lib/api/schemas";
 import { syncBriefingsForDates } from "@/services/briefingService";
 
 export async function GET(req: NextRequest) {
   const userId = await getAuthedUserIdFromRequest(req);
-  // Keep response shape stable for the client hook; unauthenticated users have no events.
-  if (!userId) return NextResponse.json([], { status: 401 });
+  if (!userId) {
+    return jsonResponse([], eventListResponseSchema, { status: 401 });
+  }
 
-  const { searchParams } = new URL(req.url);
-  const start = searchParams.get("start");
-  const end = searchParams.get("end");
+  const q = parseSearchParams(
+    new URL(req.url),
+    (url) => ({
+      start: url.searchParams.get("start"),
+      end: url.searchParams.get("end"),
+    }),
+    eventsGetQuerySchema
+  );
+  if (!q.ok) return q.response;
 
   try {
-    const events = await runGetEventsForUser(userId, { start, end });
-    return NextResponse.json(events);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message ?? "Failed to load events" },
-      { status: 500 }
-    );
+    const events = await runGetEventsForUser(userId, {
+      start: q.data.start,
+      end: q.data.end,
+    });
+    return jsonResponse(events, eventListResponseSchema);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to load events";
+    return jsonResponse({ error: message }, errorResponseSchema, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   const userId = await getAuthedUserIdFromRequest(req);
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonResponse({ error: "Unauthorized" }, errorResponseSchema, {
+      status: 401,
+    });
   }
 
-  const body = await req.json();
+  const parsed = await parseJsonBody(req, createEventPostBodySchema);
+  if (!parsed.ok) return parsed.response;
+
+  const body = parsed.data;
 
   try {
     const event = await runCreateManualEventForUser(userId, {
@@ -48,30 +72,36 @@ export async function POST(req: NextRequest) {
     });
     try {
       await syncBriefingsForDates(userId, [body.date]);
-    } catch (briefingError: any) {
-      console.warn("Briefing update failed (event was created):", briefingError?.message);
+    } catch (briefingError: unknown) {
+      console.warn(
+        "Briefing update failed (event was created):",
+        briefingError instanceof Error ? briefingError.message : briefingError
+      );
     }
-    return NextResponse.json(event);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message ?? "Failed to create event" },
-      { status: 500 }
-    );
+    return jsonResponse(event, eventResponseSchema);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to create event";
+    return jsonResponse({ error: message }, errorResponseSchema, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
   const userId = await getAuthedUserIdFromRequest(req);
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonResponse({ error: "Unauthorized" }, errorResponseSchema, {
+      status: 401,
+    });
   }
 
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
+  const q = parseSearchParams(
+    new URL(req.url),
+    (url) => ({ id: url.searchParams.get("id") ?? "" }),
+    eventsDeleteQuerySchema
+  );
+  if (!q.ok) return q.response;
 
-  if (!id) {
-    return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  }
+  const { id } = q.data;
 
   try {
     const event = await runGetEventForUser(userId, id);
@@ -79,15 +109,17 @@ export async function DELETE(req: NextRequest) {
     if (event?.date) {
       try {
         await syncBriefingsForDates(userId, [event.date]);
-      } catch (briefingError: any) {
-        console.warn("Briefing update after delete failed:", briefingError?.message);
+      } catch (briefingError: unknown) {
+        console.warn(
+          "Briefing update after delete failed:",
+          briefingError instanceof Error ? briefingError.message : briefingError
+        );
       }
     }
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message ?? "Failed to delete event" },
-      { status: 500 }
-    );
+    return jsonResponse({ success: true }, deleteEventSuccessResponseSchema);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to delete event";
+    return jsonResponse({ error: message }, errorResponseSchema, { status: 500 });
   }
 }

@@ -1,5 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { jsonResponse, parseJsonBody } from "@/lib/api/httpZod";
+import {
+  errorResponseSchema,
+  profileGetResponseSchema,
+  profilePostBodySchema,
+  userProfileResponseSchema,
+} from "@/lib/api/schemas";
 import {
   getUserProfile,
   upsertUserProfileForUser,
@@ -19,27 +26,37 @@ async function getAuthedUser(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const user = await getAuthedUser(req);
   if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return jsonResponse(
+      { error: "Not authenticated" },
+      errorResponseSchema,
+      { status: 401 }
+    );
   }
 
   try {
     const profile = await getUserProfile(user.id);
-    return NextResponse.json(profile);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message ?? "Failed to load profile" },
-      { status: 500 }
-    );
+    return jsonResponse(profile, profileGetResponseSchema);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to load profile";
+    return jsonResponse({ error: message }, errorResponseSchema, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   const user = await getAuthedUser(req);
   if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return jsonResponse(
+      { error: "Not authenticated" },
+      errorResponseSchema,
+      { status: 401 }
+    );
   }
 
-  const body = await req.json();
+  const parsed = await parseJsonBody(req, profilePostBodySchema);
+  if (!parsed.ok) return parsed.response;
+
+  const body = parsed.data;
 
   try {
     const profile = await upsertUserProfileForUser(user.id, {
@@ -47,12 +64,10 @@ export async function POST(req: NextRequest) {
       familyName: body.familyName,
       email: user.email ?? "",
     });
-    return NextResponse.json(profile);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message ?? "Failed to save profile" },
-      { status: 500 }
-    );
+    return jsonResponse(profile, userProfileResponseSchema);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to save profile";
+    return jsonResponse({ error: message }, errorResponseSchema, { status: 500 });
   }
 }
-

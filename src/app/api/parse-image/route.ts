@@ -1,5 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getAuthedUserIdFromRequest } from "@/lib/apiAuth";
+import { jsonResponse } from "@/lib/api/httpZod";
+import {
+  errorResponseSchema,
+  parseImageSuccessResponseSchema,
+} from "@/lib/api/schemas";
 import { processParseImageUpload } from "@/services/parseImageService";
 
 /**
@@ -9,29 +14,37 @@ import { processParseImageUpload } from "@/services/parseImageService";
 export async function POST(req: NextRequest) {
   const userId = await getAuthedUserIdFromRequest(req);
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonResponse({ error: "Unauthorized" }, errorResponseSchema, {
+      status: 401,
+    });
   }
 
   let formData: FormData;
   try {
     formData = await req.formData();
   } catch {
-    return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
+    return jsonResponse({ error: "Invalid form data" }, errorResponseSchema, {
+      status: 400,
+    });
   }
 
   const file = formData.get("file");
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Missing file" }, { status: 400 });
+    return jsonResponse({ error: "Missing file" }, errorResponseSchema, {
+      status: 400,
+    });
   }
 
   const result = await processParseImageUpload(userId, file);
 
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.message },
-      { status: result.status }
-    );
+    return jsonResponse({ error: result.message }, errorResponseSchema, {
+      status: result.status,
+    });
   }
 
-  return NextResponse.json({ events: result.events, count: result.count });
+  return jsonResponse(
+    { events: result.events, count: result.count },
+    parseImageSuccessResponseSchema
+  );
 }

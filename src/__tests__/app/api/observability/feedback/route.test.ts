@@ -55,6 +55,16 @@ describe("POST /api/observability/feedback", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 when briefingId missing", async () => {
+    mockAuth.mockResolvedValue("u1");
+    const req = new NextRequest("http://localhost/api/observability/feedback", {
+      method: "POST",
+      body: JSON.stringify({ sentiment: "up" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
   it("returns 200 when feedback recorded", async () => {
     mockAuth.mockResolvedValue("u1");
     const req = new NextRequest("http://localhost/api/observability/feedback", {

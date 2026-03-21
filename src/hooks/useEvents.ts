@@ -1,5 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Event } from "@/types";
+import type { Event } from "@/types";
+import {
+  errorResponseSchema,
+  eventListResponseSchema,
+  eventResponseSchema,
+} from "@/lib/api/schemas";
 import { getAccessToken } from "@/services/authClient";
 
 async function fetchEvents(start?: string, end?: string): Promise<Event[]> {
@@ -12,15 +17,20 @@ async function fetchEvents(start?: string, end?: string): Promise<Event[]> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
+  const raw: unknown = await res.json();
+
   if (res.status === 401) {
     return [];
   }
 
   if (!res.ok) {
-    throw new Error("Failed to load events");
+    const err = errorResponseSchema.safeParse(raw);
+    throw new Error(
+      err.success ? err.data.error : "Failed to load events"
+    );
   }
 
-  return res.json();
+  return eventListResponseSchema.parse(raw);
 }
 
 async function createEvent(event: Partial<Event>): Promise<Event> {
@@ -29,8 +39,7 @@ async function createEvent(event: Partial<Event>): Promise<Event> {
     throw new Error("Not authenticated");
   }
 
-  const rawFamilyMemberId =
-    (event as any).familyMemberId ?? event.familyMemberId ?? null;
+  const rawFamilyMemberId = event.familyMemberId ?? null;
 
   const payload = {
     title: event.title,
@@ -51,22 +60,20 @@ async function createEvent(event: Partial<Event>): Promise<Event> {
     body: JSON.stringify(payload),
   });
 
+  const raw: unknown = await res.json();
+
   if (!res.ok) {
     if (res.status === 401) {
       throw new Error("Please sign in again.");
     }
-    const body = await res.json().catch(() => null);
-    const raw = body?.error;
-    const message =
-      typeof raw === "string"
-        ? raw
-        : typeof raw === "object" && raw?.message
-          ? String(raw.message)
-          : "Failed to add event";
+    const body = errorResponseSchema.safeParse(raw);
+    const message = body.success
+      ? body.data.error
+      : "Failed to add event";
     throw new Error(message);
   }
 
-  return res.json();
+  return eventResponseSchema.parse(raw);
 }
 
 async function removeEvent(id: string): Promise<void> {
@@ -82,12 +89,14 @@ async function removeEvent(id: string): Promise<void> {
     },
   });
 
+  const raw: unknown = await res.json();
+
   if (!res.ok) {
     if (res.status === 401) throw new Error("Please sign in again.");
-    const body = await res.json().catch(() => null);
-    const raw = body?.error;
-    const message =
-      typeof raw === "string" ? raw : raw?.message ?? "Failed to delete event";
+    const body = errorResponseSchema.safeParse(raw);
+    const message = body.success
+      ? body.data.error
+      : "Failed to delete event";
     throw new Error(message);
   }
 }

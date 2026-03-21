@@ -58,6 +58,10 @@ flowchart TB
   subgraph delivery [Delivery layer]
     Pages[app/dashboard pages + hooks]
     Routes[app/api routes]
+    subgraph apiContract [lib/api Zod]
+      HttpZ[httpZod.ts helpers]
+      Sch[schemas primitives bodies queries responses]
+    end
   end
   subgraph application [Application layer]
     subgraph briefing_ctx [briefing]
@@ -132,7 +136,22 @@ flowchart TB
 
 **Infrastructure:** **`supabaseBriefingRepository`**, **`supabaseEventRepository`**, and **`supabaseFamilyRepository`** map DB rows ↔ domain types; **`email.ts`** implements the email port with the Resend SDK and shared HTML/text. **Anthropic** is called from use cases via the existing generator; we did not rewrite `generateWeeklyBriefing`—it stays a thin adapter over the SDK.
 
-**Delivery:** API routes validate auth (`Authorization: Bearer` + `getAuthedUserIdFromRequest`), map to JSON, and delegate to the relevant **module** (`briefingModule`, `eventModule`, `familyModule`). Client hooks (`useEvents`, `useFamilyMembers`, `useBriefings`) and pages consume the HTTP APIs.
+**Delivery:** API routes validate auth (`Authorization: Bearer` + `getAuthedUserIdFromRequest`), validate **requests and responses** with **Zod** (see below), and delegate to the relevant **module** (`briefingModule`, `eventModule`, `familyModule`). Client hooks (`useEvents`, `useFamilyMembers`, `useBriefings`) **parse successful JSON** with the **same exported schemas** so the wire format stays a single source of truth.
+
+### HTTP contracts with Zod (`src/lib/api/`)
+
+All JSON **App Router** handlers under `src/app/api/**` use shared schemas so inputs and outputs match the types the UI expects:
+
+| Piece | Role |
+|--------|------|
+| [`src/lib/api/schemas/`](src/lib/api/schemas/) | **Primitives** (e.g. event category, ISO date), **request bodies** (POST payloads), **query objects** (e.g. `events` `start`/`end`, `DELETE` `id`), and **response** shapes (events, members, briefings, errors). |
+| [`src/lib/api/httpZod.ts`](src/lib/api/httpZod.ts) | **`parseJsonBody(req, schema)`** — `safeParse` + `400` with `{ error }` on failure; **`parseSearchParams(url, build, schema)`** for query strings; **`jsonResponse(data, schema, init?)`** — `schema.parse` before `NextResponse.json` so bad domain-to-JSON mapping fails in tests/CI. |
+
+**Usage pattern (routes):** after auth, call `parseJsonBody` / `parseSearchParams`; on success pass typed `data` into use cases; return with `jsonResponse(...)`. **Multipart** [`parse-image`](src/app/api/parse-image/route.ts) only validates the **success JSON** (`events` + `count`), not the form body.
+
+**Usage pattern (hooks):** `await res.json()` then **`schema.parse(raw)`** (or `errorResponseSchema.safeParse` on errors) so a breaking API change throws early instead of corrupting React state.
+
+**Errors:** Invalid JSON → `400` + `{ error: "Invalid JSON" }`. Zod validation failures → `400` + `{ error: "<first issue message>" }`. Most auth failures still use `{ error: "…" }` with `401`/`403` as before.
 
 ### Briefing: end-to-end flow (manual generate)
 
@@ -190,6 +209,7 @@ If email fails, the briefing is still **saved**; the API returns **`emailSent: f
 | **Moment.js** | Explicit calendar-week semantics (`isoWeek`) and stable formatting across environments; briefing code uses **`Date`** in TypeScript and converts at I/O boundaries. |
 | **Resend** | Simple transactional email API; HTML + plain text from one send path. |
 | **Claude (Anthropic)** | Family-facing copy and structured extraction; prompts live in `src/lib/anthropic.ts`. |
+| **Zod** | Runtime validation for API JSON bodies, query params, and responses; shared with client hooks under `src/lib/api/schemas`. |
 | **Jest + RTL** | Unit tests for domain, use cases, infrastructure adapters, remaining services, and API route handlers; `setupTests` sets env for Supabase client in tests. |
 
 ### Testing strategy
@@ -197,7 +217,7 @@ If email fails, the briefing is still **saved**; the API returns **`emailSent: f
 - **Domain:** `parseBriefingSections`, `getWeekStart` / `getWeekEnd`, `pickCurrentBriefing`.
 - **Application:** `generateBriefingForUserWeek`, `listBriefingItemsForUser`, `recordBriefingFeedback` with mocked ports; event/family use cases tested via repository fakes where needed.
 - **Infrastructure:** Supabase adapters (`supabaseBriefingRepository`, `supabaseEventRepository`, `supabaseFamilyRepository`) with mocked `supabaseAdmin`; `briefingService` cron path with mocked repository and email.
-- **HTTP:** Route tests with `@jest-environment node` and mocked auth or use cases.
+- **HTTP:** Route tests with `@jest-environment node` and mocked auth or use cases; Zod rejects bad bodies (e.g. feedback without `briefingId`) with `400`.
 - **UI:** Component tests for calendar pieces; briefings page relies on domain + hooks tests for faster feedback.
 
 ---
@@ -206,7 +226,7 @@ If email fails, the briefing is still **saved**; the API returns **`emailSent: f
 
 - **Framework:** Next.js 14 (App Router)
 - **UI / state:** React 18, TanStack Query, Zustand, Tailwind + globals.css design tokens
-- **Backend / data:** Supabase (Postgres + Auth) with `supabaseAdmin` on the server only
+- **Backend / data:** Supabase (Postgres + Auth) with `supabaseAdmin` on the server only; **Zod** for API I/O under `src/lib/api/`
 - **AI / email:** Anthropic Claude, Resend
 - **Billing:** Stripe (trial / subscription)
 
@@ -220,7 +240,7 @@ src/
 │   │   ├── briefing/
 │   │   │   ├── generate/       # POST – manual weekly briefing generation
 │   │   │   └── list/           # GET – slim briefing list for sidebar
-│   │   ├── events/             # Calendar CRUD via eventService
+│   │   ├── events/             # Calendar CRUD via eventModule + Zod
 │   │   ├── family-members/
 │   │   ├── observability/
 │   │   │   └── feedback/       # POST – thumbs up/down (briefing id)
@@ -247,6 +267,9 @@ src/
 │   └── layout/                   # DashboardLayout (sidebar nav)
 ├── domain/                     # Domain helpers (e.g. calendar import, event/familyMember)
 ├── lib/
+│   ├── api/
+│   │   ├── httpZod.ts          # parseJsonBody, parseSearchParams, jsonResponse
+│   │   └── schemas/            # Zod: bodies, queries, responses, primitives
 │   ├── anthropic.ts
 │   ├── briefing/               # Pure domain: week + parseSections + pickCurrentBriefing
 │   ├── email.ts                # Resend adapter (implements email port)
@@ -262,6 +285,8 @@ src/
 ---
 
 ## Setup
+
+**Node version:** This repo targets **Node 20** (see [`.nvmrc`](.nvmrc)). Use `nvm use` (or install Node 20) before `npm install`. Running on **Node 18** works for many tasks but you will see `EBADENGINE` warnings from npm and from current **Supabase** packages, which declare `>=20`.
 
 1. Clone and install
 
@@ -286,6 +311,12 @@ cp .env.example .env.local
 ```bash
 npm run dev
 ```
+
+### npm audit and Next.js
+
+`npm audit` may still report **high** findings for **`next`** even on the latest **14.2.x** (e.g. `14.2.35`). The suggested `npm audit fix --force` typically installs **Next 15+** or **16**—a **major upgrade**, not a safe patch.
+
+**Recommendation:** Keep **`next@^14.2.35`** until you deliberately migrate to Next 15/16 and regression-test the app. Avoid `npm audit fix --force` unless that is your goal. Several advisories target specific setups (e.g. self-hosted image optimizer, rewrites); check each [GitHub advisory](https://github.com/advisories) against how you deploy.
 
 ## GitHub Actions CI
 

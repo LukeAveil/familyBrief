@@ -19,11 +19,12 @@
     "@tanstack/query-core": "^5.90.20",
     "@tanstack/react-query": "^5.90.21",
     "moment": "^2.30.1",
-    "next": "14.2.0",
+    "next": "^14.2.35",
     "react": "^18",
     "react-dom": "^18",
     "resend": "^3.2.0",
     "stripe": "^14.21.0",
+    "zod": "^3.24.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

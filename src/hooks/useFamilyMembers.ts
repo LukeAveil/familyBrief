@@ -1,5 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { FamilyMember } from "@/types";
+import type { FamilyMember } from "@/types";
+import {
+  errorResponseSchema,
+  familyMemberListResponseSchema,
+  familyMemberResponseSchema,
+} from "@/lib/api/schemas";
 import { getAccessToken } from "@/services/authClient";
 
 async function fetchFamilyMembers(): Promise<FamilyMember[]> {
@@ -9,6 +14,8 @@ async function fetchFamilyMembers(): Promise<FamilyMember[]> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
+  const raw: unknown = await res.json();
+
   if (res.status === 401) {
     return [];
   }
@@ -16,7 +23,7 @@ async function fetchFamilyMembers(): Promise<FamilyMember[]> {
   if (!res.ok) {
     throw new Error("Failed to load family members");
   }
-  return res.json();
+  return familyMemberListResponseSchema.parse(raw);
 }
 
 async function createFamilyMember(input: {
@@ -39,13 +46,17 @@ async function createFamilyMember(input: {
     body: JSON.stringify(input),
   });
 
+  const raw: unknown = await res.json();
+
   if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    const message = body?.error ?? "Failed to add family member";
+    const body = errorResponseSchema.safeParse(raw);
+    const message = body.success
+      ? body.data.error
+      : "Failed to add family member";
     throw new Error(message);
   }
 
-  return res.json();
+  return familyMemberResponseSchema.parse(raw);
 }
 
 export function useFamilyMembers() {

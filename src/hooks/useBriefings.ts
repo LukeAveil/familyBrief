@@ -3,18 +3,21 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BriefingListItem } from "@/types";
+import {
+  briefingGenerateResponseSchema,
+  briefingListResponseSchema,
+  errorResponseSchema,
+} from "@/lib/api/schemas";
 import { getAccessToken } from "@/services/authClient";
 import { getToday, parseIsoDate, pickCurrentBriefing } from "@/lib/briefing";
 
-type BriefingListApiRow = {
+function mapBriefingListItem(row: {
   id: string;
   weekStart: string;
   content: string;
   sentAt?: string | null;
   createdAt: string;
-};
-
-function mapBriefingListItem(row: BriefingListApiRow): BriefingListItem {
+}): BriefingListItem {
   return {
     id: row.id,
     weekStart: parseIsoDate(row.weekStart),
@@ -30,16 +33,20 @@ async function fetchBriefings(): Promise<BriefingListItem[]> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
+  const raw: unknown = await res.json();
+
   if (res.status === 401) {
     return [];
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "Failed to load briefings");
+    const err = errorResponseSchema.safeParse(raw);
+    throw new Error(
+      err.success ? err.data.error : "Failed to load briefings"
+    );
   }
-  const raw = (await res.json()) as BriefingListApiRow[];
-  return raw.map(mapBriefingListItem);
+  const rows = briefingListResponseSchema.parse(raw);
+  return rows.map(mapBriefingListItem);
 }
 
 export type GenerateBriefingResult = {
@@ -49,17 +56,6 @@ export type GenerateBriefingResult = {
     content: string;
     weekStart: Date;
     sentAt: Date;
-  };
-  emailSent: boolean;
-};
-
-type GenerateBriefingApiResponse = {
-  success: boolean;
-  briefing: {
-    id: string;
-    content: string;
-    weekStart: string;
-    sentAt: string;
   };
   emailSent: boolean;
 };
@@ -107,17 +103,14 @@ export function useBriefings() {
           "Content-Type": "application/json",
         },
       });
-      const body = (await res.json().catch(() => ({}))) as
-        | GenerateBriefingApiResponse
-        | { error?: string };
+      const raw: unknown = await res.json();
       if (!res.ok) {
+        const err = errorResponseSchema.safeParse(raw);
         throw new Error(
-          "error" in body && body.error
-            ? body.error
-            : "Failed to generate briefing"
+          err.success ? err.data.error : "Failed to generate briefing"
         );
       }
-      const ok = body as GenerateBriefingApiResponse;
+      const ok = briefingGenerateResponseSchema.parse(raw);
       setGenerateError(null);
       await queryClient.invalidateQueries({ queryKey: ["briefings"] });
       const result: GenerateBriefingResult = {

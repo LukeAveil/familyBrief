@@ -1,15 +1,26 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { parseEmailToEvents } from "@/lib/anthropic";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { jsonResponse, parseJsonBody } from "@/lib/api/httpZod";
+import {
+  errorResponseSchema,
+  parseEmailPostBodySchema,
+  parseEmailSuccessResponseSchema,
+} from "@/lib/api/schemas";
 import { buildInsertRowsFromExtracted } from "@/domain/calendarImport";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { syncBriefingsForDates } from "@/services/briefingService";
 
 export async function POST(req: NextRequest) {
-  const payload = await req.json();
-  const toAddress: string = payload.to || "";
+  const parsed = await parseJsonBody(req, parseEmailPostBodySchema);
+  if (!parsed.ok) return parsed.response;
+
+  const payload = parsed.data;
+  const toAddress = payload.to;
   const userIdMatch = toAddress.match(/family\+([^@]+)@/);
   if (!userIdMatch) {
-    return NextResponse.json({ error: "Invalid address" }, { status: 400 });
+    return jsonResponse({ error: "Invalid address" }, errorResponseSchema, {
+      status: 400,
+    });
   }
 
   const userId = userIdMatch[1];
@@ -20,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   const extractedEvents = await parseEmailToEvents(
     payload.subject,
-    payload.text || payload.html,
+    payload.text ?? payload.html ?? "",
     members || []
   );
 
@@ -54,8 +65,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({
-    success: true,
-    eventsCreated: rows.length,
-  });
+  return jsonResponse(
+    {
+      success: true as const,
+      eventsCreated: rows.length,
+    },
+    parseEmailSuccessResponseSchema
+  );
 }

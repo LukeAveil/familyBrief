@@ -1,47 +1,43 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import {
   BriefingNotFoundError,
   recordBriefingFeedback,
 } from "@/application/briefing/briefingUseCases";
 import { getAuthedUserIdFromRequest } from "@/lib/apiAuth";
+import { jsonResponse, parseJsonBody } from "@/lib/api/httpZod";
+import {
+  errorResponseSchema,
+  feedbackOkResponseSchema,
+  feedbackPostBodySchema,
+} from "@/lib/api/schemas";
 import { supabaseBriefingRepository } from "@/infrastructure/briefing/supabaseBriefingRepository";
 
 export async function POST(req: NextRequest) {
   const userId = await getAuthedUserIdFromRequest(req);
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonResponse({ error: "Unauthorized" }, errorResponseSchema, {
+      status: 401,
+    });
   }
 
-  let body: { briefingId?: string; sentiment?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(req, feedbackPostBodySchema);
+  if (!parsed.ok) return parsed.response;
 
-  const briefingId = body.briefingId;
-  const sentiment = body.sentiment;
-  if (!briefingId || typeof briefingId !== "string") {
-    return NextResponse.json({ error: "briefingId is required" }, { status: 400 });
-  }
-  if (sentiment !== "up" && sentiment !== "down") {
-    return NextResponse.json(
-      { error: "sentiment must be 'up' or 'down'" },
-      { status: 400 }
-    );
-  }
+  const { briefingId, sentiment } = parsed.data;
 
   try {
     await recordBriefingFeedback(userId, briefingId, sentiment, {
       repo: supabaseBriefingRepository,
     });
-    return NextResponse.json({ ok: true });
+    return jsonResponse({ ok: true }, feedbackOkResponseSchema);
   } catch (e) {
     if (e instanceof BriefingNotFoundError) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return jsonResponse({ error: "Not found" }, errorResponseSchema, {
+        status: 404,
+      });
     }
     const message =
       e instanceof Error ? e.message : "Failed to record feedback";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonResponse({ error: message }, errorResponseSchema, { status: 500 });
   }
 }
