@@ -16,14 +16,6 @@ This project is intentionally both a **real product** and a **sandbox for learni
 - Practice thinking like a **product manager**: breaking down the product into increments, roadmapping, and iterating based on feedback.
 - Refine my own **development workflow in the AI era** — what to delegate to AI, what to keep as human judgment, and how to combine both effectively.
 
-## What it does (current & planned)
-
-- ✅ Displays a clean family calendar with colour-coded members
-- ✅ Lets you add family members and events manually
-- ✅ **Weekly briefing**: generate with Claude, save to Postgres, show in-app, email via Resend (`/dashboard/briefings`, `/api/briefing/generate`, `/api/briefing/list`)
-- ✅ **Inbound parse-email**: `POST /api/parse-email` turns forwarded mail into events (Claude + Postgres) when inbound routing is configured
-- ✅ **Cron batch send**: `POST /api/weekly-briefing` (Bearer `CRON_SECRET`) runs `runSendWeeklyBriefingsForActiveUsers` (via `briefingModule`) for all **active** subscribers and returns `{ sent, total }`
-
 ---
 
 ## Software design & architecture
@@ -51,126 +43,90 @@ We follow **Clean Architecture** ideas: **dependencies point inward**. Outer lay
 - **I** — Small interfaces (`BriefingRepository`, `WeeklyBriefingEmailPort`, `EventQueryPort`, `UserQueryPort`, `EventRepository`, `FamilyRepository`, `UserRepository`, …) instead of one giant module.
 - **D** — Use cases depend on ports; routes delegate to **composition roots** (`briefingModule`, `eventModule`, `familyModule`) that wire concrete adapters.
 
-### Layered structure
 
-```mermaid
-flowchart TB
-  subgraph delivery [Delivery layer]
-    Pages[app/dashboard pages + hooks]
-    Routes[app/api routes]
-    subgraph apiContract [lib/api Zod]
-      HttpZ[httpZod.ts helpers]
-      Sch[schemas primitives bodies queries responses]
-    end
-  end
-  subgraph application [Application layer]
-    subgraph briefing_ctx [briefing]
-      UC[briefingUseCases]
-      Ports[briefingPorts]
-      Mod[briefingModule]
-    end
-    subgraph events_ctx [events]
-      EUC[eventUseCases]
-      EP[eventPorts]
-      EMod[eventModule]
-    end
-    subgraph family_ctx [family]
-      FUC[familyUseCases]
-      FP[familyPorts]
-      FMod[familyModule]
-    end
-    subgraph user_ctx [user]
-      UUC[userUseCases]
-      UP[userPorts]
-      UMod[userModule]
-    end
-    subgraph parsed_ctx [parsedEmail]
-      PEM[parsedEmailModule]
-    end
-    subgraph calImport_ctx [calendarImport]
-      CalMod[calendarImportModule]
-    end
-  end
-  subgraph domain [Domain layer]
-    Dom[src/domain types + calendarImport]
-    Week[lib/briefing/week …]
-    Parse[lib/briefing/parseSections …]
-  end
-  subgraph infra [Infrastructure layer]
-    RepoB[supabaseBriefingRepository]
-    RepoE[supabaseEventRepository]
-    RepoF[supabaseFamilyRepository]
-    RepoU[supabaseUserRepository]
-    RepoP[supabaseParsedEmailRepository]
-    Email[lib/email.ts Resend]
-    Anthropic[lib/anthropic.ts]
-  end
-  subgraph data [External systems]
-    PG[(Supabase Postgres)]
-    R[Resend API]
-    A[Anthropic API]
-  end
-  Pages --> UC
-  Routes --> Mod
-  Routes --> EMod
-  Routes --> FMod
-  Routes --> UMod
-  Routes --> PEM
-  Routes --> CalMod
-  CalMod -.->|runGetFamilyMembersForUser| FMod
-  CalMod -.->|runInsertExtractedEventsForUser| EMod
-  CalMod -.->|runSyncBriefingsForDates| Mod
-  CalMod --> Anthropic
-  Mod --> UC
-  EMod --> EUC
-  FMod --> FUC
-  UC --> Ports
-  EUC --> EP
-  FUC --> FP
-  UC --> Week
-  UC --> Parse
-  UUC --> UP
-  RepoB -.implements.-> Ports
-  RepoE -.implements.-> EP
-  RepoF -.implements.-> FP
-  RepoU -.implements.-> UP
-  Email -.implements.-> Ports
-  UC --> RepoB
-  UC --> Email
-  EUC --> RepoE
-  FUC --> RepoF
-  UUC --> RepoU
-  RepoB --> PG
-  RepoE --> PG
-  RepoF --> PG
-  RepoU --> PG
-  RepoP --> PG
-  Email --> R
-  UC --> Anthropic
-  Anthropic --> A
-  Mod -.->|EventQueryPort| EMod
-  Mod -.->|UserQueryPort| UMod
-  UMod --> UUC
-  PEM --> RepoP
-```
+### Domain (`src/domain/` + `src/lib/briefing/`)
 
-**Domain (`src/domain/` + `src/lib/briefing/`):** Core model types (**`Event`**, **`FamilyMember`**, **`User`**, briefing types) and invariants live under **`src/domain/`**; **`src/types/index.ts`** re-exports them for existing **`@/types`** imports. Calendar-import helpers (**`calendarImport`**, extracted-event rows) and **`EVENT_CATEGORIES`** live next to that model. **`src/lib/api/schemas/primitives.ts`** builds **Zod** enums from the same **`EVENT_CATEGORIES`** / **`FAMILY_MEMBER_ROLES`** tuples so API validation cannot drift from the domain. **`src/lib/briefing/`** holds pure week math, section parsing, and “current briefing” selection—no Supabase, no Resend. Calendar week boundaries and labels use **Moment.js** with **ISO week** semantics; **`Date`** is the in-memory type at boundaries; **`toIsoDateString` / `parseIsoDate`** convert for APIs and SQL. Plain-text briefing sections are parsed once for both **HTML email** and **in-app UI** so formatting never drifts.
+Core model types and invariants. No framework imports.
 
-**Application — briefing (`src/application/briefing/`):** **Ports** define **BriefingRepository** (including **`recordFeedback`** → **`briefing_feedback`** table), **WeeklyBriefingEmailPort**, **EventQueryPort**, **UserQueryPort** (slim user fields for generation + email), and **`ActiveUsersQueryPort`** (cron subscriber list). **Use cases** implement: **`generateBriefingForUserWeek`** (loads events for the week, generates with Claude, upserts, emails), **`listBriefingItemsForUser`**, **`recordBriefingFeedback`**, **`ensureBriefingForWeek`** (event-driven refresh for a single week), **`syncBriefingsForDates`** (deduplicates weeks across a list of dates, non-fatal per-week errors), and **`sendWeeklyBriefingsForActiveUsers`** (cron batch — calls `generateBriefingForUserWeek` for each active subscriber via `Promise.allSettled`). **`briefingModule.ts`** wires concrete adapters and exposes `run*` functions — notably `runSyncBriefingsForDates` (called after event create/delete/import) and `runSendWeeklyBriefingsForActiveUsers` (called by the cron route).
+- **Types:** `Event`, `FamilyMember`, `User`, briefing types — canonical definitions live in `src/domain/`; `src/types/index.ts` re-exports them for existing `@/types` imports
+- **Constants:** `EVENT_CATEGORIES`, `FAMILY_MEMBER_ROLES` — `src/lib/api/schemas/primitives.ts` builds Zod enums from these same tuples so API validation cannot drift from the domain
+- **Briefing helpers** (`src/lib/briefing/`): pure week math, section parsing, and “current briefing” selection — no Supabase, no Resend
+- **Date handling:** ISO week boundaries via Moment.js; `Date` is the in-memory type; `toIsoDateString` / `parseIsoDate` convert for APIs and SQL
+- **Section parsing:** plain-text briefing sections parsed once for both HTML email and in-app UI so formatting never drifts
 
-**Application — events (`src/application/events/`):** **EventRepository** includes bulk **`insertExtractedEventsForUser`** for email/vision imports. **`eventModule.ts`** exposes **`runInsertExtractedEventsForUser`** alongside the existing run functions.
+---
 
-**Application — family (`src/application/family/`):** **FamilyRepository**, **`runGetFamilyMembersForUser`**, etc.—used by parse-email, parse-image, and other flows (not by the manual weekly generate path).
+### Application — briefing (`src/application/briefing/`)
 
-**Application — user (`src/application/user/`):** **UserRepository** + **`runGetUserProfile`**, **`runUpsertUserProfile`**, **`runGetActiveSubscribedUsers`** (cron subscriber list). **`GET/POST /api/profile`** and other callers use **`userModule`**, not a legacy service layer.
+Orchestrates all briefing generation, delivery, and feedback.
 
-**Application — parsed email (`src/application/parsedEmail/`):** Small port + **`runRecordParsedEmail`** so **`/api/parse-email`** never talks to **`supabaseAdmin`** directly for **`parsed_emails`**.
+- **Ports:** `BriefingRepository` (incl. `recordFeedback` → `briefing_feedback`), `WeeklyBriefingEmailPort`, `EventQueryPort`, `UserQueryPort` (slim fields for generation + email), `ActiveUsersQueryPort` (cron subscriber list)
+- **Use cases:**
+  - `generateBriefingForUserWeek` — loads events, generates with Claude, upserts, emails
+  - `listBriefingItemsForUser`
+  - `recordBriefingFeedback`
+  - `ensureBriefingForWeek` — event-driven refresh for a single week
+  - `syncBriefingsForDates` — deduplicates weeks across a list of dates, non-fatal per-week errors
+  - `sendWeeklyBriefingsForActiveUsers` — cron batch via `Promise.allSettled`
+- **Module exports** (`briefingModule.ts`):
+  - `runSyncBriefingsForDates` — called after event create/delete/import
+  - `runSendWeeklyBriefingsForActiveUsers` — called by the cron route
 
-**Application — calendarImport (`src/application/calendarImport/`):** **`calendarImportModule.ts`** owns the end-to-end image/PDF upload pipeline: validate file → resolve MIME type → load family members via `familyModule` → call Claude vision → build insert rows from domain helpers → insert events via `eventModule` → refresh briefings via `runSyncBriefingsForDates`. Exposed as **`runProcessParseImageUpload`** so the route stays thin and all sub-steps are testable via module mocks.
+---
 
-**Infrastructure:** **`supabaseBriefingRepository`** uses the **`upsert_weekly_briefing`** RPC for atomic week rows and implements **`recordFeedback`**. **`supabaseEventRepository`**, **`supabaseFamilyRepository`**, **`supabaseUserRepository`**, **`supabaseParsedEmailRepository`** map DB rows ↔ types. **`email.ts`** implements the email port (Resend). **Anthropic** is **`lib/anthropic.ts`**; briefing generation still calls **`generateWeeklyBriefing`** from there.
+### Application — events (`src/application/events/`)
 
-**Delivery:** API routes stay thin: auth → Zod I/O → `run*` module call → `jsonResponse`. All routes import from **`briefingModule`**, **`eventModule`**, **`familyModule`**, **`userModule`**, **`parsedEmailModule`**, or **`calendarImportModule`**. No route touches `supabaseAdmin` or any service layer directly. Date fields in responses (e.g. briefing list) are serialized explicitly to ISO strings before `jsonResponse`, not via JSON round-tripping. Client hooks parse responses with the **same Zod schemas** as the server.
+- **Repository:** `EventRepository` includes bulk `insertExtractedEventsForUser` for email/vision imports
+- **Module export:** `runInsertExtractedEventsForUser` alongside existing run functions
+
+### Application — family (`src/application/family/`)
+
+- **Repository:** `FamilyRepository`
+- **Module export:** `runGetFamilyMembersForUser` — used by parse-email, parse-image, and other flows (not the manual weekly generate path)
+
+### Application — user (`src/application/user/`)
+
+- **Repository:** `UserRepository`
+- **Module exports:** `runGetUserProfile`, `runUpsertUserProfile`, `runGetActiveSubscribedUsers` (cron subscriber list)
+- `GET/POST /api/profile` and other callers use `userModule`, not a legacy service layer
+
+### Application — parsed email (`src/application/parsedEmail/`)
+
+- Small port + `runRecordParsedEmail` so `/api/parse-email` never calls `supabaseAdmin` directly for `parsed_emails`
+
+### Application — calendarImport (`src/application/calendarImport/`)
+
+End-to-end image/PDF upload pipeline owned by `calendarImportModule.ts`:
+
+1. Validate file → resolve MIME type
+2. Load family members via `familyModule`
+3. Call Claude vision
+4. Build insert rows from domain helpers
+5. Insert events via `eventModule`
+6. Refresh briefings via `runSyncBriefingsForDates`
+
+Exposed as `runProcessParseImageUpload` — route stays thin, all sub-steps testable via module mocks.
+
+---
+
+### Infrastructure (`src/infrastructure/`)
+
+Concrete Supabase adapters — one per feature:
+
+- `supabaseBriefingRepository` — uses `upsert_weekly_briefing` RPC for atomic week rows; implements `recordFeedback`
+- `supabaseEventRepository`, `supabaseFamilyRepository`, `supabaseUserRepository`, `supabaseParsedEmailRepository` — each maps DB rows ↔ domain types
+- `email.ts` — implements the email port (Resend)
+- `lib/anthropic.ts` — briefing generation calls `generateWeeklyBriefing` from here
+
+---
+
+### Delivery (`src/app/api/`, `src/components/`, `src/hooks/`)
+
+Routes stay thin: **auth → Zod I/O → `run*` call → `jsonResponse`**.
+
+- All routes import from module roots (`briefingModule`, `eventModule`, `familyModule`, `userModule`, `parsedEmailModule`, `calendarImportModule`) — never `supabaseAdmin` or service layer directly
+- Date fields in responses are serialized explicitly to ISO strings before `jsonResponse`, not via JSON round-tripping
+- Client hooks parse responses with the same Zod schemas as the server
 
 ### HTTP contracts with Zod (`src/lib/api/`)
 
@@ -186,45 +142,6 @@ All JSON **App Router** handlers under `src/app/api/**` use shared schemas so in
 **Usage pattern (hooks):** `await res.json()` then **`schema.parse(raw)`** (or `errorResponseSchema.safeParse` on errors) so a breaking API change throws early instead of corrupting React state.
 
 **Errors:** Invalid JSON → `400` + `{ error: "Invalid JSON" }`. Zod validation failures → `400` + `{ error: "<first issue message>" }`. Most auth failures still use `{ error: "…" }` with `401`/`403` as before.
-
-### Briefing: end-to-end flow (manual generate)
-
-```mermaid
-sequenceDiagram
-  participant User
-  participant Page as BriefingsPage
-  participant Hook as useBriefings
-  participant API as POST /api/briefing/generate
-  participant Mod as briefingModule
-  participant UC as generateBriefingForUserWeek
-  participant UserMod as userModule profile
-  participant Ev as eventModule
-  participant Repo as BriefingRepository
-  participant AI as generateWeeklyBriefing
-  participant Mail as Resend email
-
-  User->>Page: Generate briefing
-  Page->>Hook: generateBriefing()
-  Hook->>API: Bearer JWT
-  API->>Mod: runGenerateBriefingForUserWeek
-  Mod->>UC: deps wired
-  UC->>UserMod: UserQueryPort getUser
-  UserMod-->>UC: name familyName email
-  UC->>Ev: runGetEventsForUser week range
-  Ev-->>UC: Event[]
-  UC->>AI: familyName parentName events
-  AI-->>UC: plain text content
-  UC->>Repo: upsert week row
-  UC->>Mail: HTML plus text email
-  Mail-->>UC: ok or fail
-  UC-->>Mod: briefing plus emailSent
-  Mod-->>API: JSON
-  API-->>Hook: JSON
-  Hook->>Hook: invalidate briefings query
-  Hook-->>Page: show current briefing
-```
-
-If email fails, the briefing is still **saved**; the API returns **`emailSent: false`** so the client can show accurate state.
 
 ### Authentication & data access
 
