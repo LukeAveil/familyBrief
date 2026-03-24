@@ -1,4 +1,5 @@
 import type {
+  ActiveUsersQueryPort,
   BriefingGeneratorPort,
   BriefingRepository,
   EventQueryPort,
@@ -11,8 +12,11 @@ import {
   getToday,
   getWeekEnd,
   getWeekStart,
+  parseIsoDate,
+  toIsoDateString,
 } from "@/lib/briefing/week";
 import type { BriefingListItem, Event } from "@/types";
+import type { Sentiment } from "@/domain/briefing";
 
 export type GenerateBriefingDeps = {
   repo: BriefingRepository;
@@ -128,7 +132,7 @@ export class BriefingNotFoundError extends Error {
 export async function recordBriefingFeedback(
   userId: string,
   briefingId: string,
-  sentiment: "up" | "down",
+  sentiment: Sentiment,
   deps: FeedbackDeps
 ): Promise<void> {
   const row = await deps.repo.getByIdForUser(briefingId, userId);
@@ -136,4 +140,82 @@ export async function recordBriefingFeedback(
     throw new BriefingNotFoundError();
   }
   await deps.repo.recordFeedback(briefingId, userId, sentiment);
+}
+
+export type EnsureBriefingDeps = {
+  repo: BriefingRepository;
+  getEvents: EventQueryPort;
+  getUser: UserQueryPort;
+  generate?: BriefingGeneratorPort;
+};
+
+export async function ensureBriefingForWeek(
+  userId: string,
+  eventDate: string,
+  deps: EnsureBriefingDeps
+): Promise<void> {
+  const user = await deps.getUser(userId);
+  if (!user) return;
+
+  const weekStart = getWeekStart(parseIsoDate(eventDate));
+  const weekEnd = getWeekEnd(weekStart);
+
+  const events = await deps.getEvents(userId, { start: weekStart, end: weekEnd });
+  const formatted = mapEventsForGenerator(events);
+
+  const runGenerate = deps.generate ?? defaultGenerate;
+  const content = await runGenerate({
+    familyName: user.familyName,
+    parentName: user.name,
+    events: formatted,
+  });
+
+  await deps.repo.upsertForWeek({ userId, weekStart, content });
+}
+
+export async function syncBriefingsForDates(
+  userId: string,
+  dates: string[],
+  deps: EnsureBriefingDeps
+): Promise<void> {
+  const weekSeen = new Set<string>();
+  for (const date of dates) {
+    const ws = toIsoDateString(getWeekStart(parseIsoDate(date)));
+    if (weekSeen.has(ws)) continue;
+    weekSeen.add(ws);
+    try {
+      await ensureBriefingForWeek(userId, date, deps);
+    } catch (err) {
+      console.warn("Briefing sync failed:", (err as Error)?.message);
+    }
+  }
+}
+
+export type SendWeeklyBriefingsDeps = GenerateBriefingDeps & {
+  getActiveUsers: ActiveUsersQueryPort;
+};
+
+export async function sendWeeklyBriefingsForActiveUsers(
+  deps: SendWeeklyBriefingsDeps
+): Promise<{ sent: number; total: number }> {
+  const users = await deps.getActiveUsers();
+  if (!users.length) return { sent: 0, total: 0 };
+
+  const results = await Promise.allSettled(
+    users.map((user) =>
+      generateBriefingForUserWeek(user.id, {
+        ...deps,
+        getUser: async () => ({
+          name: user.name,
+          familyName: user.familyName,
+          email: user.email,
+        }),
+      })
+    )
+  );
+
+  return {
+    sent: results.filter((r) => r.status === "fulfilled").length,
+    total: users.length,
+  };
 }

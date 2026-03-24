@@ -1,8 +1,8 @@
-import type { FamilyMember } from "@/types";
+import type { FamilyMember, FamilyMemberRole } from "@/types";
 
 export type CreateFamilyMemberInput = {
   name: string;
-  role: "parent" | "child";
+  role: FamilyMemberRole;
   age?: number;
   color: string;
 };

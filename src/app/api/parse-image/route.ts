@@ -5,7 +5,7 @@ import {
   errorResponseSchema,
   parseImageSuccessResponseSchema,
 } from "@/lib/api/schemas";
-import { processParseImageUpload } from "@/services/parseImageService";
+import { runProcessParseImageUpload } from "@/application/calendarImport/calendarImportModule";
 
 /**
  * Multipart upload → Claude vision/PDF extraction → Supabase insert → optional briefing refresh.
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const result = await processParseImageUpload(userId, file);
+  const result = await runProcessParseImageUpload(userId, file);
 
   if (!result.ok) {
     return jsonResponse({ error: result.message }, errorResponseSchema, {

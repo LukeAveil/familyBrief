@@ -10,7 +10,7 @@ import {
   parseEmailSuccessResponseSchema,
 } from "@/lib/api/schemas";
 import { buildInsertRowsFromExtracted } from "@/domain/calendarImport";
-import { syncBriefingsForDates } from "@/services/briefingService";
+import { runSyncBriefingsForDates } from "@/application/briefing/briefingModule";
 
 export async function POST(req: NextRequest) {
   const parsed = await parseJsonBody(req, parseEmailPostBodySchema);
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     if (rows.length > 0) {
       await runInsertExtractedEventsForUser(userId, rows);
-      await syncBriefingsForDates(
+      await runSyncBriefingsForDates(
         userId,
         rows.map((r) => r.date)
       );

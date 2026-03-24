@@ -1,8 +1,6 @@
 import { NextRequest } from "next/server";
-import {
-  BriefingNotFoundError,
-  recordBriefingFeedback,
-} from "@/application/briefing/briefingUseCases";
+import { BriefingNotFoundError } from "@/application/briefing/briefingUseCases";
+import { runRecordBriefingFeedback } from "@/application/briefing/briefingModule";
 import { getAuthedUserIdFromRequest } from "@/lib/apiAuth";
 import { jsonResponse, parseJsonBody } from "@/lib/api/httpZod";
 import {
@@ -10,7 +8,6 @@ import {
   feedbackOkResponseSchema,
   feedbackPostBodySchema,
 } from "@/lib/api/schemas";
-import { supabaseBriefingRepository } from "@/infrastructure/briefing/supabaseBriefingRepository";
 
 export async function POST(req: NextRequest) {
   const userId = await getAuthedUserIdFromRequest(req);
@@ -26,9 +23,7 @@ export async function POST(req: NextRequest) {
   const { briefingId, sentiment } = parsed.data;
 
   try {
-    await recordBriefingFeedback(userId, briefingId, sentiment, {
-      repo: supabaseBriefingRepository,
-    });
+    await runRecordBriefingFeedback(userId, briefingId, sentiment);
     return jsonResponse({ ok: true }, feedbackOkResponseSchema);
   } catch (e) {
     if (e instanceof BriefingNotFoundError) {

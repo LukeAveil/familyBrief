@@ -1,5 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Event } from "@/types";
+import type { Event, EventCategory } from "@/types";
+
+type CreateEventInput = {
+  title: string;
+  date: string;
+  category: EventCategory;
+  time?: string;
+  location?: string;
+  description?: string;
+  familyMemberId?: string | null;
+};
 import {
   errorResponseSchema,
   eventListResponseSchema,
@@ -33,7 +43,7 @@ async function fetchEvents(start?: string, end?: string): Promise<Event[]> {
   return eventListResponseSchema.parse(raw);
 }
 
-async function createEvent(event: Partial<Event>): Promise<Event> {
+async function createEvent(event: CreateEventInput): Promise<Event> {
   const token = await getAccessToken();
   if (!token) {
     throw new Error("Not authenticated");

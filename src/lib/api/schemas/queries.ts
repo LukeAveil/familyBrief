@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { isoDateYmd } from "@/lib/api/schemas/primitives";
 
 export const eventsGetQuerySchema = z.object({
-  start: z.string().nullable(),
-  end: z.string().nullable(),
+  start: isoDateYmd.nullable(),
+  end: isoDateYmd.nullable(),
 });
 
 export const eventsDeleteQuerySchema = z.object({

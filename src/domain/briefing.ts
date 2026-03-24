@@ -1,5 +1,9 @@
 import type { Event } from "@/domain/event";
 
+export const SENTIMENTS = ["up", "down"] as const;
+
+export type Sentiment = (typeof SENTIMENTS)[number];
+
 export interface WeeklyBriefing {
   id: string;
   userId: string;

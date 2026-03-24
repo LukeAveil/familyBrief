@@ -17,8 +17,8 @@ jest.mock("@/lib/anthropic", () => ({
   ]),
 }));
 
-jest.mock("@/services/briefingService", () => ({
-  syncBriefingsForDates: jest.fn(),
+jest.mock("@/application/briefing/briefingModule", () => ({
+  runSyncBriefingsForDates: jest.fn(),
 }));
 
 import { File as NodeBufferFile } from "node:buffer";
@@ -29,15 +29,13 @@ import {
   buildInsertRowsFromExtracted,
   coerceIsoDate,
   fileToBase64,
-  insertCalendarImportEvents,
-  loadFamilyMembers,
   mapExtractedItemToInsertRow,
-  processParseImageUpload,
   resolveMediaTypeForVision,
   validateUploadedFile,
-} from "@/services/parseImageService";
+} from "@/domain/calendarImport";
+import { runProcessParseImageUpload } from "@/application/calendarImport/calendarImportModule";
 import { parseImageOrPdfToEvents } from "@/lib/anthropic";
-import { syncBriefingsForDates } from "@/services/briefingService";
+import { runSyncBriefingsForDates } from "@/application/briefing/briefingModule";
 
 if (typeof globalThis.File === "undefined") {
   (globalThis as unknown as { File: typeof NodeBufferFile }).File =
@@ -53,8 +51,8 @@ const mockInsertExtracted = runInsertExtractedEventsForUser as jest.MockedFuncti
 const mockParseImage = parseImageOrPdfToEvents as jest.MockedFunction<
   typeof parseImageOrPdfToEvents
 >;
-const mockSyncBriefings = syncBriefingsForDates as jest.MockedFunction<
-  typeof syncBriefingsForDates
+const mockSyncBriefings = runSyncBriefingsForDates as jest.MockedFunction<
+  typeof runSyncBriefingsForDates
 >;
 
 const imageMeta = { source: "image" as const, raw_email_id: null };
@@ -70,7 +68,7 @@ const sampleEvent = {
   createdAt: "2026-03-10T10:00:00.000Z",
 };
 
-describe("parseImageService", () => {
+describe("calendarImport domain", () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -225,180 +223,106 @@ describe("parseImageService", () => {
       expect(rows[0].title).toBe("A");
     });
   });
+});
 
-  describe("loadFamilyMembers", () => {
-    it("returns members on success", async () => {
-      mockGetFamilyMembers.mockResolvedValue([
-        {
-          id: "m1",
-          userId: "u1",
-          name: "Alex",
-          role: "child",
-          color: "#f59e0b",
-        },
-      ]);
-
-      const r = await loadFamilyMembers("u1");
-      expect(r.ok).toBe(true);
-      if (r.ok) expect(r.members).toHaveLength(1);
-      expect(mockGetFamilyMembers).toHaveBeenCalledWith("u1");
-    });
-
-    it("returns failure when family load throws", async () => {
-      mockGetFamilyMembers.mockRejectedValue(new Error("db down"));
-
-      const r = await loadFamilyMembers("u1");
-      expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.message).toBe("Failed to load family members");
-    });
+describe("runProcessParseImageUpload", () => {
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
-  describe("insertCalendarImportEvents", () => {
-    it("returns mapped events on success", async () => {
-      mockInsertExtracted.mockResolvedValue([sampleEvent]);
+  function mockHappyPathModules() {
+    mockGetFamilyMembers.mockResolvedValue([
+      {
+        id: "m1",
+        userId: "u1",
+        name: "Alex",
+        role: "child",
+        color: "#f59e0b",
+      },
+    ]);
+    mockInsertExtracted.mockResolvedValue([
+      {
+        ...sampleEvent,
+        title: "Meet",
+        date: "2026-06-01",
+      },
+    ]);
+  }
 
-      const r = await insertCalendarImportEvents("u1", [
-        {
-          user_id: "u1",
-          family_member_id: null,
-          title: "T",
-          description: null,
-          date: "2026-03-15",
-          time: null,
-          location: null,
-          category: "school",
-          source: "image",
-          raw_email_id: null,
-        },
-      ]);
-
-      expect(mockInsertExtracted).toHaveBeenCalledWith("u1", expect.any(Array));
-      expect(r.ok).toBe(true);
-      if (r.ok) {
-        expect(r.events).toHaveLength(1);
-        expect(r.events[0].id).toBe("e1");
-        expect(r.events[0].source).toBe("image");
-      }
-    });
-
-    it("returns failure when insert throws", async () => {
-      mockInsertExtracted.mockRejectedValue(new Error("insert failed"));
-
-      const r = await insertCalendarImportEvents("u1", [
-        {
-          user_id: "u1",
-          family_member_id: null,
-          title: "T",
-          description: null,
-          date: "2026-03-15",
-          time: null,
-          location: null,
-          category: "other",
-          source: "image",
-          raw_email_id: null,
-        },
-      ]);
-
-      expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.message).toBe("Failed to save events");
-    });
-  });
-
-  describe("processParseImageUpload", () => {
-    function mockHappyPathModules() {
-      mockGetFamilyMembers.mockResolvedValue([
-        {
-          id: "m1",
-          userId: "u1",
-          name: "Alex",
-          role: "child",
-          color: "#f59e0b",
-        },
-      ]);
-      mockInsertExtracted.mockResolvedValue([
-        {
-          ...sampleEvent,
-          title: "Meet",
-          date: "2026-06-01",
-        },
-      ]);
+  it("returns 400 when file validation fails", async () => {
+    const file = new File([], "empty.png", { type: "image/png" });
+    const r = await runProcessParseImageUpload("u1", file);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(400);
+      expect(r.message).toBe("Empty file");
     }
+  });
 
-    it("returns 400 when file validation fails", async () => {
-      const file = new File([], "empty.png", { type: "image/png" });
-      const r = await processParseImageUpload("u1", file);
-      expect(r.ok).toBe(false);
-      if (!r.ok) {
-        expect(r.status).toBe(400);
-        expect(r.message).toBe("Empty file");
-      }
-    });
+  it("returns 400 when MIME is unsupported", async () => {
+    const file = new File(["x"], "x.svg", { type: "image/svg+xml" });
+    const r = await runProcessParseImageUpload("u1", file);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(400);
+      expect(r.message).toContain("Unsupported file type");
+    }
+  });
 
-    it("returns 400 when MIME is unsupported", async () => {
-      const file = new File(["x"], "x.svg", { type: "image/svg+xml" });
-      const r = await processParseImageUpload("u1", file);
-      expect(r.ok).toBe(false);
-      if (!r.ok) {
-        expect(r.status).toBe(400);
-        expect(r.message).toContain("Unsupported file type");
-      }
-    });
+  it("returns 500 when family members cannot be loaded", async () => {
+    mockGetFamilyMembers.mockRejectedValue(new Error("err"));
+    const file = new File(["x"], "a.png", { type: "image/png" });
+    const r = await runProcessParseImageUpload("u1", file);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.status).toBe(500);
+  });
 
-    it("returns 500 when family members cannot be loaded", async () => {
-      mockGetFamilyMembers.mockRejectedValue(new Error("err"));
-      const file = new File(["x"], "a.png", { type: "image/png" });
-      const r = await processParseImageUpload("u1", file);
-      expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.status).toBe(500);
-    });
+  it("returns 500 when Claude throws", async () => {
+    mockGetFamilyMembers.mockResolvedValue([]);
+    mockParseImage.mockRejectedValue(new Error("API error"));
+    const file = new File(["x"], "a.png", { type: "image/png" });
+    const r = await runProcessParseImageUpload("u1", file);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(500);
+      expect(r.message).toContain("Could not read");
+    }
+  });
 
-    it("returns 500 when Claude throws", async () => {
-      mockGetFamilyMembers.mockResolvedValue([]);
-      mockParseImage.mockRejectedValue(new Error("API error"));
-      const file = new File(["x"], "a.png", { type: "image/png" });
-      const r = await processParseImageUpload("u1", file);
-      expect(r.ok).toBe(false);
-      if (!r.ok) {
-        expect(r.status).toBe(500);
-        expect(r.message).toContain("Could not read");
-      }
-    });
+  it("returns empty success when the model returns no events", async () => {
+    mockGetFamilyMembers.mockResolvedValue([]);
+    mockParseImage.mockResolvedValue([]);
+    const file = new File(["x"], "a.png", { type: "image/png" });
+    const r = await runProcessParseImageUpload("u1", file);
+    expect(r).toEqual({ ok: true, events: [], count: 0 });
+  });
 
-    it("returns empty success when the model returns no events", async () => {
-      mockGetFamilyMembers.mockResolvedValue([]);
-      mockParseImage.mockResolvedValue([]);
-      const file = new File(["x"], "a.png", { type: "image/png" });
-      const r = await processParseImageUpload("u1", file);
-      expect(r).toEqual({ ok: true, events: [], count: 0 });
-    });
+  it("returns empty success when extraction yields no valid rows", async () => {
+    mockGetFamilyMembers.mockResolvedValue([]);
+    mockParseImage.mockResolvedValue([{ title: "no date" }]);
+    const file = new File(["x"], "a.png", { type: "image/png" });
+    const r = await runProcessParseImageUpload("u1", file);
+    expect(r).toEqual({ ok: true, events: [], count: 0 });
+  });
 
-    it("returns empty success when extraction yields no valid rows", async () => {
-      mockGetFamilyMembers.mockResolvedValue([]);
-      mockParseImage.mockResolvedValue([{ title: "no date" }]);
-      const file = new File(["x"], "a.png", { type: "image/png" });
-      const r = await processParseImageUpload("u1", file);
-      expect(r).toEqual({ ok: true, events: [], count: 0 });
-    });
+  it("returns events on full success", async () => {
+    mockHappyPathModules();
+    mockParseImage.mockResolvedValue([
+      {
+        title: "Meet",
+        date: "2026-06-01",
+        category: "school",
+      },
+    ]);
 
-    it("returns events on full success", async () => {
-      mockHappyPathModules();
-      mockParseImage.mockResolvedValue([
-        {
-          title: "Meet",
-          date: "2026-06-01",
-          category: "school",
-        },
-      ]);
+    const file = new File(["x"], "a.png", { type: "image/png" });
+    const r = await runProcessParseImageUpload("u1", file);
 
-      const file = new File(["x"], "a.png", { type: "image/png" });
-      const r = await processParseImageUpload("u1", file);
-
-      expect(r.ok).toBe(true);
-      if (r.ok) {
-        expect(r.count).toBe(1);
-        expect(r.events[0].title).toBe("Meet");
-      }
-      expect(mockSyncBriefings).toHaveBeenCalledWith("u1", ["2026-06-01"]);
-    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.count).toBe(1);
+      expect(r.events[0].title).toBe("Meet");
+    }
+    expect(mockSyncBriefings).toHaveBeenCalledWith("u1", ["2026-06-01"]);
   });
 });

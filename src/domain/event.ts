@@ -9,6 +9,10 @@ export const EVENT_CATEGORIES = [
 
 export type EventCategory = (typeof EVENT_CATEGORIES)[number];
 
+export const EVENT_SOURCES = ["manual", "email", "image"] as const;
+
+export type EventSource = (typeof EVENT_SOURCES)[number];
+
 export interface Event {
   id: string;
   userId: string;
@@ -24,7 +28,7 @@ export interface Event {
   time?: string;
   location?: string;
   category: EventCategory;
-  source: "manual" | "email" | "image";
+  source: EventSource;
   rawEmailId?: string;
   createdAt: string; // ISO timestamp
 }

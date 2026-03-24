@@ -4,35 +4,27 @@
 import { POST } from "@/app/api/observability/feedback/route";
 import { NextRequest } from "next/server";
 import { getAuthedUserIdFromRequest } from "@/lib/apiAuth";
-import { recordBriefingFeedback } from "@/application/briefing/briefingUseCases";
+import { runRecordBriefingFeedback } from "@/application/briefing/briefingModule";
+import { BriefingNotFoundError } from "@/application/briefing/briefingUseCases";
 
 jest.mock("@/lib/apiAuth", () => ({
   getAuthedUserIdFromRequest: jest.fn(),
 }));
-jest.mock("@/infrastructure/briefing/supabaseBriefingRepository", () => ({
-  supabaseBriefingRepository: {},
+jest.mock("@/application/briefing/briefingModule", () => ({
+  runRecordBriefingFeedback: jest.fn(),
 }));
-jest.mock("@/application/briefing/briefingUseCases", () => {
-  const actual = jest.requireActual<
-    typeof import("@/application/briefing/briefingUseCases")
-  >("@/application/briefing/briefingUseCases");
-  return {
-    ...actual,
-    recordBriefingFeedback: jest.fn().mockResolvedValue(undefined),
-  };
-});
 
 const mockAuth = getAuthedUserIdFromRequest as jest.MockedFunction<
   typeof getAuthedUserIdFromRequest
 >;
-const mockRecord = recordBriefingFeedback as jest.MockedFunction<
-  typeof recordBriefingFeedback
+const mockRun = runRecordBriefingFeedback as jest.MockedFunction<
+  typeof runRecordBriefingFeedback
 >;
 
 describe("POST /api/observability/feedback", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockRecord.mockResolvedValue(undefined);
+    mockRun.mockResolvedValue(undefined);
   });
 
   it("returns 401 when unauthenticated", async () => {
@@ -73,11 +65,17 @@ describe("POST /api/observability/feedback", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(200);
-    expect(mockRecord).toHaveBeenCalledWith(
-      "u1",
-      "b1",
-      "up",
-      expect.objectContaining({ repo: expect.any(Object) })
-    );
+    expect(mockRun).toHaveBeenCalledWith("u1", "b1", "up");
+  });
+
+  it("returns 404 when briefing not found", async () => {
+    mockAuth.mockResolvedValue("u1");
+    mockRun.mockRejectedValue(new BriefingNotFoundError());
+    const req = new NextRequest("http://localhost/api/observability/feedback", {
+      method: "POST",
+      body: JSON.stringify({ briefingId: "missing", sentiment: "down" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(404);
   });
 });

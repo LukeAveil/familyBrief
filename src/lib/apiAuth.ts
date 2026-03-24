@@ -18,3 +18,21 @@ export async function getAuthedUserIdFromRequest(
     return null;
   }
 }
+
+/** Reads `Authorization: Bearer <jwt>` and validates it with Supabase; returns the signed-in user id and email or null. */
+export async function getAuthedUserFromRequest(
+  req: NextRequest
+): Promise<{ id: string; email: string | null } | null> {
+  const auth = req.headers.get("authorization") || "";
+  const match = auth.match(/^Bearer\s+(.+)$/i);
+  const token = match?.[1];
+  if (!token) return null;
+
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data.user) return null;
+    return { id: data.user.id, email: data.user.email ?? null };
+  } catch {
+    return null;
+  }
+}

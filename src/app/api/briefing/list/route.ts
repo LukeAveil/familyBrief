@@ -17,10 +17,14 @@ export async function GET(_req: NextRequest) {
 
   try {
     const items = await runListBriefingItemsForUser(userId);
-    return jsonResponse(
-      JSON.parse(JSON.stringify(items)),
-      briefingListResponseSchema
-    );
+    const wire = items.map((item) => ({
+      id: item.id,
+      weekStart: item.weekStart.toISOString(),
+      content: item.content,
+      sentAt: item.sentAt?.toISOString() ?? null,
+      createdAt: item.createdAt.toISOString(),
+    }));
+    return jsonResponse(wire, briefingListResponseSchema);
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Failed to load briefings";

@@ -16,7 +16,7 @@ import {
   eventsDeleteQuerySchema,
   eventsGetQuerySchema,
 } from "@/lib/api/schemas";
-import { syncBriefingsForDates } from "@/services/briefingService";
+import { runSyncBriefingsForDates } from "@/application/briefing/briefingModule";
 
 export async function GET(req: NextRequest) {
   const userId = await getAuthedUserIdFromRequest(req);
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       description: body.description,
     });
     try {
-      await syncBriefingsForDates(userId, [body.date]);
+      await runSyncBriefingsForDates(userId, [body.date]);
     } catch (briefingError: unknown) {
       console.warn(
         "Briefing update failed (event was created):",
@@ -108,7 +108,7 @@ export async function DELETE(req: NextRequest) {
     await runDeleteEventForUser(userId, id);
     if (event?.date) {
       try {
-        await syncBriefingsForDates(userId, [event.date]);
+        await runSyncBriefingsForDates(userId, [event.date]);
       } catch (briefingError: unknown) {
         console.warn(
           "Briefing update after delete failed:",

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getAuthedUserFromRequest } from "@/lib/apiAuth";
 import { jsonResponse, parseJsonBody } from "@/lib/api/httpZod";
 import {
   errorResponseSchema,
@@ -12,22 +12,11 @@ import {
   runUpsertUserProfile,
 } from "@/application/user/userModule";
 
-async function getAuthedUser(req: NextRequest) {
-  const auth = req.headers.get("authorization") || "";
-  const match = auth.match(/^Bearer\s+(.+)$/i);
-  const token = match?.[1];
-  if (!token) return null;
-
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data.user) return null;
-  return data.user;
-}
-
 export async function GET(req: NextRequest) {
-  const user = await getAuthedUser(req);
+  const user = await getAuthedUserFromRequest(req);
   if (!user) {
     return jsonResponse(
-      { error: "Not authenticated" },
+      { error: "Unauthorized" },
       errorResponseSchema,
       { status: 401 }
     );
@@ -44,10 +33,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getAuthedUser(req);
+  const user = await getAuthedUserFromRequest(req);
   if (!user) {
     return jsonResponse(
-      { error: "Not authenticated" },
+      { error: "Unauthorized" },
       errorResponseSchema,
       { status: 401 }
     );

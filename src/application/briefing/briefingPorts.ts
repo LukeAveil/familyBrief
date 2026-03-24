@@ -1,4 +1,5 @@
 import type { Event } from "@/types";
+import type { Sentiment } from "@/domain/briefing";
 
 export type BriefingGeneratorInput = {
   familyName: string;
@@ -60,7 +61,7 @@ export type BriefingRepository = {
   recordFeedback: (
     briefingId: string,
     userId: string,
-    sentiment: "up" | "down"
+    sentiment: Sentiment
   ) => Promise<void>;
 };
 
@@ -72,3 +73,7 @@ export type EventQueryPort = (
 export type UserQueryPort = (
   userId: string
 ) => Promise<{ name: string; familyName: string; email: string } | null>;
+
+export type ActiveUsersQueryPort = () => Promise<
+  { id: string; email: string; name: string; familyName: string }[]
+>;

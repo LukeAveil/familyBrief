@@ -4,7 +4,7 @@ import {
   errorResponseSchema,
   weeklyBriefingCronResponseSchema,
 } from "@/lib/api/schemas";
-import { sendWeeklyBriefingsForActiveUsers } from "@/services/briefingService";
+import { runSendWeeklyBriefingsForActiveUsers } from "@/application/briefing/briefingModule";
 
 /** Cron: send weekly briefings to all active subscribers (Bearer CRON_SECRET). */
 export async function POST(_req: NextRequest) {
@@ -15,6 +15,6 @@ export async function POST(_req: NextRequest) {
     });
   }
 
-  const result = await sendWeeklyBriefingsForActiveUsers();
+  const result = await runSendWeeklyBriefingsForActiveUsers();
   return jsonResponse(result, weeklyBriefingCronResponseSchema);
 }
