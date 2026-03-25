@@ -1,6 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type PasswordRecoverySessionResult = "ready" | "invalid" | "aborted";
+export type PasswordRecoverySessionResult = 'ready' | 'invalid' | 'aborted';
 
 const RECOVERY_WAIT_MS = 2000;
 
@@ -14,7 +14,7 @@ export async function waitForPasswordRecoverySession(
   signal: AbortSignal
 ): Promise<PasswordRecoverySessionResult> {
   if (signal.aborted) {
-    return "aborted";
+    return 'aborted';
   }
 
   const hasSession = async (): Promise<boolean> => {
@@ -25,19 +25,18 @@ export async function waitForPasswordRecoverySession(
   };
 
   if (await hasSession()) {
-    return "ready";
+    return 'ready';
   }
   if (signal.aborted) {
-    return "aborted";
+    return 'aborted';
   }
 
   return new Promise<PasswordRecoverySessionResult>((resolve) => {
     let settled = false;
-    let timeoutId: ReturnType<typeof setTimeout>;
 
     const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
       if (nextSession) {
-        finish("ready");
+        finish('ready');
       }
     });
     const { subscription } = data;
@@ -52,17 +51,17 @@ export async function waitForPasswordRecoverySession(
       resolve(result);
     }
 
-    timeoutId = setTimeout(async () => {
+    const timeoutId = setTimeout(async () => {
       if (signal.aborted) {
         return;
       }
       if (await hasSession()) {
-        finish("ready");
+        finish('ready');
       } else if (!signal.aborted) {
-        finish("invalid");
+        finish('invalid');
       }
     }, RECOVERY_WAIT_MS);
 
-    signal.addEventListener("abort", () => finish("aborted"), { once: true });
+    signal.addEventListener('abort', () => finish('aborted'), { once: true });
   });
 }

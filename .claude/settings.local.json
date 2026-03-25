@@ -4,7 +4,8 @@
       "Bash(grep -n \"as const\" /Users/lukeaveil/claude_experiments/familybrief/src/domain/*.ts)",
       "Bash(grep -r \"sentiment\\\\|Sentiment\" /Users/lukeaveil/claude_experiments/familybrief/src --include=*.ts)",
       "Bash(grep -r \"eventSourceSchema\\\\|EVENT_SOURCE\" /Users/lukeaveil/claude_experiments/familybrief/src --include=*.ts)",
-      "Bash(npx jest:*)"
+      "Bash(npx jest:*)",
+      "Bash(npx eslint:*)"
     ]
   }
 }

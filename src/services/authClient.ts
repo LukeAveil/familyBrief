@@ -11,8 +11,8 @@ export async function getAccessToken(): Promise<string | null> {
       return null;
     }
     return session?.access_token ?? null;
-  } catch (e: any) {
-    const msg = e?.message ?? String(e);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     if (
       typeof msg === "string" &&
       (msg.includes("x-api-key") || msg.includes("authentication_error"))
