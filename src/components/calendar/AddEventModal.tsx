@@ -2,11 +2,12 @@
 "use client";
 import { useState } from "react";
 import { FamilyMember, Event } from "@/types";
+import type { CreateManualEventInput } from "@/application/events/eventPorts";
 
 interface Props {
   members: FamilyMember[];
   selectedDate: Date;
-  onAdd: (event: Partial<Event>) => Promise<Event>;
+  onAdd: (event: CreateManualEventInput) => Promise<Event>;
   onClose: () => void;
 }
 

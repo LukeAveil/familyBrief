@@ -16,7 +16,7 @@ beforeEach(() => {
 
 describe("POST /api/auth/logout", () => {
   it("returns success when signOut succeeds", async () => {
-    mockSignOut.mockResolvedValue({ error: null });
+    mockSignOut.mockResolvedValue({ data: null, error: null });
     const res = await POST();
     expect(res.status).toBe(200);
     const json = await res.json();
@@ -24,7 +24,7 @@ describe("POST /api/auth/logout", () => {
   });
 
   it("returns 500 when signOut fails", async () => {
-    mockSignOut.mockResolvedValue({ error: "Session expired" });
+    mockSignOut.mockResolvedValue({ data: null, error: "Session expired" });
     const res = await POST();
     expect(res.status).toBe(500);
     const json = await res.json();

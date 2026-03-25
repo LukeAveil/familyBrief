@@ -1,15 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Event, EventCategory } from "@/types";
+import type { Event } from "@/types";
+import type { CreateManualEventInput } from "@/application/events/eventPorts";
 
-type CreateEventInput = {
-  title: string;
-  date: string;
-  category: EventCategory;
-  time?: string;
-  location?: string;
-  description?: string;
-  familyMemberId?: string | null;
-};
+type CreateEventInput = CreateManualEventInput;
 import {
   errorResponseSchema,
   eventListResponseSchema,

@@ -89,11 +89,16 @@ describe("insertExtractedEventsForUser", () => {
     const repo = makeRepo();
     const rows = [
       {
+        user_id: "u1",
+        family_member_id: null,
         title: "Dentist",
+        description: null,
         date: "2026-03-25",
+        time: null,
+        location: null,
         category: "medical" as const,
         source: "email" as const,
-        familyMemberId: null,
+        raw_email_id: null,
       },
     ];
     const result = await insertExtractedEventsForUser("u1", rows, repo);

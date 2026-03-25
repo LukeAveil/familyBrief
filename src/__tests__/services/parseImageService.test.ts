@@ -226,7 +226,12 @@ describe("calendarImport domain", () => {
 });
 
 describe("runProcessParseImageUpload", () => {
+  beforeEach(() => {
+    jest.spyOn(console, "error").mockImplementation(() => {});
+  });
+
   afterEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
   });
 
