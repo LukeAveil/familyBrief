@@ -30,16 +30,6 @@ For detailed rationale behind each choice, see [docs/architecture.md](docs/archi
 
 ---
 
-## Architecture
-
-The app follows Clean Architecture + Ports & Adapters. Dependencies point inward — domain rules never import frameworks; infrastructure is swappable; routes stay thin.
-
-See [docs/architecture.md](docs/architecture.md) for the full layer walkthrough, HTTP contract patterns, and project structure.
-
-See [docs/testing.md](docs/testing.md) for the testing strategy.
-
----
-
 ## Setup
 
 **Node version:** This repo targets **Node 20** (see [`.nvmrc`](.nvmrc)). Use `nvm use` (or install Node 20) before `npm install`.
